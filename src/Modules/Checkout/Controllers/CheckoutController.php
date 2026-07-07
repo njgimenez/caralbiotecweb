@@ -144,8 +144,8 @@ class CheckoutController
             $subtotal += $item['price_seen'] * $item['quantity'];
         }
 
-        $orderNumber = $overrides['orderNumber'] ?? OrderService::generateOrderNumber();
-        $transactionId = (string)(time() . random_int(1000, 9999));
+        $orderNumber = $overrides['orderNumber'] ?? OrderService::generatePaymentOrderNumber();
+        $transactionId = 'LP' . date('YmdHis') . random_int(1000, 9999);
         $dateTimeTransaction = date('YmdHis');
         try {
             $izipay = IzipayService::publicConfig([

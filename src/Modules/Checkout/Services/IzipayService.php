@@ -37,7 +37,7 @@ class IzipayService
             'sdkUrl' => self::sdkUrl(),
             'merchantCode' => (string)($_ENV['IZIPAY_MERCHANT_CODE'] ?? ''),
             'tokenSession' => (string)($_ENV['IZIPAY_TOKEN_SESSION'] ?? ''),
-            'keyRSA' => (string)($_ENV['IZIPAY_KEY_RSA'] ?? ''),
+            'keyRSA' => self::normalizeKey((string)($_ENV['IZIPAY_KEY_RSA'] ?? '')),
             'demoMode' => self::isDemoMode(),
         ];
 
@@ -155,5 +155,15 @@ class IzipayService
     private static function env(): string
     {
         return strtolower((string)($_ENV['IZIPAY_ENV'] ?? 'sandbox')) === 'production' ? 'production' : 'sandbox';
+    }
+
+    private static function normalizeKey(string $value): string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return '';
+        }
+
+        return str_replace(["\\n", "\r\n", "\r"], "\n", $value);
     }
 }

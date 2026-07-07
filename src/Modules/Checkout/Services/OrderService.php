@@ -14,6 +14,11 @@ class OrderService
         return 'CAR-' . date('Ymd') . '-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 5));
     }
 
+    public static function generatePaymentOrderNumber(): string
+    {
+        return date('YmdHis') . random_int(1000, 9999);
+    }
+
     public static function createFromCart(array $customerData): int
     {
         $db = Database::getConnection();
