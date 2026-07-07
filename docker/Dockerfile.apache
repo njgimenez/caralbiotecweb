@@ -1,0 +1,26 @@
+FROM php:8.1-apache
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        git \
+        unzip \
+        libicu-dev \
+        libpng-dev \
+        libzip-dev \
+        default-mysql-client \
+    && docker-php-ext-install \
+        pdo_mysql \
+        intl \
+        gd \
+        zip \
+        bcmath \
+        opcache \
+    && a2enmod rewrite headers \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+COPY docker/apache-banahosting.conf /etc/apache2/sites-available/000-default.conf
+
+WORKDIR /var/www/html
+
+RUN chown -R www-data:www-data /var/www/html

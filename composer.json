@@ -1,0 +1,35 @@
+{
+    "name": "caral/biotec",
+    "description": "E-commerce CMS para Caral Biotec",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.1",
+        "bramus/router": "^1.6",
+        "league/plates": "^3.5",
+        "vlucas/phpdotenv": "^5.6",
+        "vlucas/valitron": "^1.4",
+        "robmorgan/phinx": "^0.16"
+    },
+    "autoload": {
+        "psr-4": {
+            "Caral\\": "src/"
+        }
+    },
+    "scripts": {
+        "db:migrate": "php vendor/robmorgan/phinx/bin/phinx migrate",
+        "db:seed": "php vendor/robmorgan/phinx/bin/phinx seed:run",
+        "db:reset": [
+            "php vendor/robmorgan/phinx/bin/phinx rollback -t 0",
+            "php vendor/robmorgan/phinx/bin/phinx migrate",
+            "php vendor/robmorgan/phinx/bin/phinx seed:run"
+        ]
+    },
+    "config": {
+        "platform": {
+            "php": "8.1.34"
+        },
+        "sort-packages": true,
+        "process-timeout": 0
+    }
+}

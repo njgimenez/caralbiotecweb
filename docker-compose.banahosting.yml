@@ -1,0 +1,22 @@
+services:
+  banaweb:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.apache
+    container_name: caral_banahosting_apache
+    ports:
+      - "8081:80"
+    volumes:
+      - .:/var/www/html
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+    networks:
+      - caral_network
+
+networks:
+  caral_network:
+    external: true
+    name: caral_caral_network

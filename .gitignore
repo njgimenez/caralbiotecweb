@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+!.env.production.example
+vendor/
+.agents/
+.openclaw/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log
+tmp/
+coverage/
+node_modules/

@@ -1,0 +1,13 @@
+.git
+.openclaw
+.idea
+.vscode
+node_modules
+tmp
+*.log
+.env
+.env.*
+!.env.example
+vendor/*/docs
+vendor/*/test
+vendor/*/tests

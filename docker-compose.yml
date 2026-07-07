@@ -1,0 +1,55 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: caral_app
+    volumes:
+      - .:/var/www/html
+    networks:
+      - caral_network
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    image: nginx:alpine
+    container_name: caral_web
+    ports:
+      - "8080:80"
+    volumes:
+      - .:/var/www/html
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - caral_network
+    depends_on:
+      - app
+
+  db:
+    image: mysql:8.0
+    container_name: caral_db
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-caralweb}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
+      MYSQL_USER: ${DB_USERNAME:-caraluser}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-caralpassword}
+    ports:
+      - "3306:3306"
+    volumes:
+      - caral_db_data:/var/lib/mysql
+    networks:
+      - caral_network
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+networks:
+  caral_network:
+    driver: bridge
+
+volumes:
+  caral_db_data:
+    driver: local
