@@ -108,3 +108,20 @@ IZIPAY_KEY_RSA=tu_llave_publica_rsa
 ```
 
 Sin `IZIPAY_TOKEN_SESSION` y `IZIPAY_KEY_RSA`, el SDK puede cargarse, pero `LoadForm()` no abre el checkout real porque ambos parametros son requeridos por Izipay. El token de sesion debe generarse desde backend usando las credenciales del panel Izipay.
+
+### Generacion backend del token de sesion
+
+Cuando `IZIPAY_DEMO_MODE=false`, `/checkout` intenta generar automaticamente el token de sesion desde backend antes de pintar el formulario. Usa el endpoint oficial `security/v1/Token/Generate` y envia:
+
+- Header `transactionId`
+- Body `requestSource`, `merchantCode`, `orderNumber`, `publicKey`, `amount`
+
+Variables requeridas para generarlo:
+
+```env
+IZIPAY_MERCHANT_CODE=tu_codigo_comercio
+IZIPAY_API_KEY=clave_api_nuevo_boton_de_pagos
+IZIPAY_KEY_RSA=llave_publica_rsa_del_panel
+```
+
+`IZIPAY_TOKEN_SESSION` queda solo como override manual temporal. Si lo dejas vacio, el sistema lo genera al cargar `/checkout`.

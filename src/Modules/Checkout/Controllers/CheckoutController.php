@@ -146,10 +146,20 @@ class CheckoutController
 
         $orderNumber = $overrides['orderNumber'] ?? OrderService::generateOrderNumber();
         $transactionId = (string)(time() . random_int(1000, 9999));
-        $izipay = IzipayService::publicConfig();
+        $dateTimeTransaction = date('YmdHis');
+        try {
+            $izipay = IzipayService::publicConfig([
+                'transactionId' => $transactionId,
+                'orderNumber' => $orderNumber,
+                'amount' => $subtotal,
+            ]);
+        } catch (\RuntimeException $e) {
+            $izipay = IzipayService::publicConfig();
+            $overrides['errors'][] = $e->getMessage();
+        }
         $izipay['orderNumber'] = $orderNumber;
         $izipay['transactionId'] = $transactionId;
-        $izipay['dateTimeTransaction'] = date('YmdHis');
+        $izipay['dateTimeTransaction'] = $dateTimeTransaction;
 
         return array_merge([
             'items' => $items,
@@ -177,3 +187,4 @@ class CheckoutController
         }
     }
 }
+
