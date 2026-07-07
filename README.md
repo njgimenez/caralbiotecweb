@@ -94,3 +94,17 @@ IZIPAY_KEY_RSA=tu_llave_publica_rsa
 ```
 
 La documentacion oficial del popup esta en https://developers.izipay.pe/web-core/modalidades/popup/.
+
+### Mostrar el popup real de Izipay
+
+El modal real del SDK se muestra cuando existen credenciales sandbox validas y el demo esta apagado:
+
+```env
+IZIPAY_ENV=sandbox
+IZIPAY_DEMO_MODE=false
+IZIPAY_MERCHANT_CODE=tu_codigo_comercio
+IZIPAY_TOKEN_SESSION=token_generado_desde_backend
+IZIPAY_KEY_RSA=tu_llave_publica_rsa
+```
+
+Sin `IZIPAY_TOKEN_SESSION` y `IZIPAY_KEY_RSA`, el SDK puede cargarse, pero `LoadForm()` no abre el checkout real porque ambos parametros son requeridos por Izipay. El token de sesion debe generarse desde backend usando las credenciales del panel Izipay.
