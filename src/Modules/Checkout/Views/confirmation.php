@@ -1,4 +1,6 @@
-<?php $this->layout('shared::layout', ['title' => '¡Pedido confirmado! — Caral Biotec']) ?>
+<?php $this->layout('shared::layout', ['title' => 'Pedido recibido — Caral Biotec']) ?>
+
+<?php $isPaid = ($order['payment_status'] ?? '') === 'paid'; ?>
 
 <div class="container py-5">
     <div class="row justify-content-center">
@@ -12,9 +14,13 @@
                             margin-bottom:1.5rem;animation:bounce .6s ease;">
                     <i class="bi bi-check-lg text-white" style="font-size:2.5rem;"></i>
                 </div>
-                <h1 class="fw-bold mb-1" style="font-size:1.75rem;">¡Pedido confirmado!</h1>
+                <h1 class="fw-bold mb-1" style="font-size:1.75rem;">
+                    <?= $isPaid ? '¡Pedido confirmado!' : 'Pago recibido' ?>
+                </h1>
                 <p class="text-muted">
-                    Gracias por tu compra. Hemos recibido tu pago correctamente.
+                    <?= $isPaid
+                        ? 'Gracias por tu compra. Hemos recibido tu pago correctamente.'
+                        : 'Gracias por tu compra. Estamos esperando la confirmacion servidor a servidor de Izipay.' ?>
                 </p>
             </div>
 
@@ -25,7 +31,8 @@
                         <h5 class="fw-bold mb-0">Orden <?= $this->e($order['order_number']) ?></h5>
                         <span class="badge rounded-pill px-3 py-2"
                               style="background:#e7e0ff;color:#4b2bb0;font-size:.8rem;">
-                            <i class="bi bi-check-circle-fill me-1"></i>Pagado
+                            <i class="bi <?= $isPaid ? 'bi-check-circle-fill' : 'bi-hourglass-split' ?> me-1"></i>
+                            <?= $isPaid ? 'Pagado' : 'Confirmando' ?>
                         </span>
                     </div>
 
@@ -74,7 +81,7 @@
 
                     <!-- Total -->
                     <div class="d-flex justify-content-between align-items-center mt-3">
-                        <span class="fw-bold fs-5">Total pagado</span>
+                        <span class="fw-bold fs-5"><?= $isPaid ? 'Total pagado' : 'Total de la orden' ?></span>
                         <span class="fw-bold fs-4" style="color:var(--green-700)">
                             S/. <?= $this->e(number_format($order['total'], 2)) ?>
                         </span>
@@ -89,11 +96,11 @@
                     <ul class="list-unstyled mb-0">
                         <li class="mb-2 d-flex gap-2">
                             <i class="bi bi-envelope mt-1" style="color:var(--green-700)"></i>
-                            <span>Recibirás un email de confirmación en <strong><?= $this->e($order['customer_email']) ?></strong>.</span>
+                            <span><?= $isPaid ? 'Recibiras un email de confirmacion en' : 'Te notificaremos la confirmacion final en' ?> <strong><?= $this->e($order['customer_email']) ?></strong>.</span>
                         </li>
                         <li class="mb-2 d-flex gap-2">
                             <i class="bi bi-truck mt-1" style="color:var(--green-700)"></i>
-                            <span>Tu pedido será procesado y enviado dentro de <strong>24-48 horas hábiles</strong>.</span>
+                            <span><?= $isPaid ? 'Tu pedido sera procesado y enviado dentro de' : 'Procesaremos tu pedido apenas Izipay confirme el pago por IPN.' ?> <?= $isPaid ? '<strong>24-48 horas habiles</strong>.' : '' ?></span>
                         </li>
                         <li class="d-flex gap-2">
                             <i class="bi bi-whatsapp mt-1" style="color:var(--green-700)"></i>

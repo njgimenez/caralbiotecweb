@@ -47,11 +47,12 @@ DB_DATABASE=cpaneluser_caralweb
 DB_USERNAME=cpaneluser_caraluser
 DB_PASSWORD=change-this-password
 
-IZIPAY_ENV=production
-IZIPAY_DEMO_MODE=false
-IZIPAY_MERCHANT_CODE=change_this
-IZIPAY_TOKEN_SESSION=generate_from_backend
-IZIPAY_KEY_RSA=change_this
+IZIPAY_USERNAME=change_this
+IZIPAY_PASSWORD=change_this
+IZIPAY_PUBLIC_KEY=change_this
+IZIPAY_HMAC_SHA256=change_this
+IZIPAY_CREATE_PAYMENT_ENDPOINT=https://api.micuentaweb.pe/api-payment/V4/Charge/CreatePayment
+IZIPAY_DEFAULT_ZIP_CODE=15000
 ```
 
 ## Exportar base local
@@ -95,6 +96,10 @@ En algunos hostings puede requerirse `775`.
 6. Registrar una venta POS.
 7. Imprimir boleta/factura.
 8. Abrir reporte POS.
+9. Configurar en el BackOffice de Izipay la URL IPN:
+   `https://TU-DOMINIO.com/checkout/izipay/ipn`
+10. Probar checkout y retorno de pago:
+   `https://TU-DOMINIO.com/checkout/izipay/resultado`
 
 ## Cuentas actuales de prueba
 

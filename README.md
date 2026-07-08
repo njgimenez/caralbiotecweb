@@ -72,56 +72,31 @@ docker compose down -v
 
 ## Izipay checkout
 
-El checkout usa Izipay Web SDK en modo `pop-up`.
+El checkout usa la integracion Izipay FormToken / Popin basada en Krypton y confirmacion IPN servidor a servidor.
 
-Para desarrollo local queda activo el modo demo:
-
-```env
-IZIPAY_ENV=sandbox
-IZIPAY_DEMO_MODE=true
-```
-
-Con ese modo el popup aprueba una transaccion simulada y permite probar creacion de orden, confirmacion, stock y carrito sin credenciales reales.
-
-Cuando Izipay entregue accesos de sandbox, configura:
+Variables requeridas:
 
 ```env
-IZIPAY_ENV=sandbox
-IZIPAY_DEMO_MODE=false
-IZIPAY_MERCHANT_CODE=tu_codigo_comercio
-IZIPAY_TOKEN_SESSION=token_generado_desde_backend_o_sandbox
-IZIPAY_KEY_RSA=tu_llave_publica_rsa
+IZIPAY_USERNAME=tu_identificador_de_tienda
+IZIPAY_PASSWORD=tu_clave_rest
+IZIPAY_PUBLIC_KEY=tu_clave_publica
+IZIPAY_HMAC_SHA256=tu_clave_hmac_sha256
+IZIPAY_CREATE_PAYMENT_ENDPOINT=https://api.micuentaweb.pe/api-payment/V4/Charge/CreatePayment
+IZIPAY_DEFAULT_ZIP_CODE=15000
 ```
 
-La documentacion oficial del popup esta en https://developers.izipay.pe/web-core/modalidades/popup/.
+Flujo:
 
-### Mostrar el popup real de Izipay
+- `/checkout` captura datos del cliente o muestra una orden pendiente recuperable.
+- `/checkout/procesar` crea una orden `pending`, copia los items del carrito y redirige a una URL recuperable.
+- `/checkout/pago` genera un FormToken para esa orden y renderiza el Popin oficial.
+- `/checkout/izipay/resultado` valida la respuesta frontend con `IZIPAY_HMAC_SHA256`.
+- `/checkout/izipay/ipn` valida la notificacion servidor a servidor con `IZIPAY_PASSWORD` y confirma el pago.
 
-El modal real del SDK se muestra cuando existen credenciales sandbox validas y el demo esta apagado:
+URL IPN para configurar en el BackOffice Izipay:
 
-```env
-IZIPAY_ENV=sandbox
-IZIPAY_DEMO_MODE=false
-IZIPAY_MERCHANT_CODE=tu_codigo_comercio
-IZIPAY_TOKEN_SESSION=token_generado_desde_backend
-IZIPAY_KEY_RSA=tu_llave_publica_rsa
+```text
+https://TU-DOMINIO.com/checkout/izipay/ipn
 ```
 
-Sin `IZIPAY_TOKEN_SESSION` y `IZIPAY_KEY_RSA`, el SDK puede cargarse, pero `LoadForm()` no abre el checkout real porque ambos parametros son requeridos por Izipay. El token de sesion debe generarse desde backend usando las credenciales del panel Izipay.
-
-### Generacion backend del token de sesion
-
-Cuando `IZIPAY_DEMO_MODE=false`, `/checkout` intenta generar automaticamente el token de sesion desde backend antes de pintar el formulario. Usa el endpoint oficial `security/v1/Token/Generate` y envia:
-
-- Header `transactionId`
-- Body `requestSource`, `merchantCode`, `orderNumber`, `publicKey`, `amount`
-
-Variables requeridas para generarlo:
-
-```env
-IZIPAY_MERCHANT_CODE=tu_codigo_comercio
-IZIPAY_API_KEY=clave_api_nuevo_boton_de_pagos
-IZIPAY_KEY_RSA=llave_publica_rsa_del_panel
-```
-
-`IZIPAY_TOKEN_SESSION` queda solo como override manual temporal. Si lo dejas vacio, el sistema lo genera al cargar `/checkout`.
+El pago se considera definitivo cuando la IPN confirma `orderStatus = PAID`. El endpoint IPN es idempotente para evitar descuentos duplicados si Izipay reintenta la notificacion.

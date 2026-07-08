@@ -10,102 +10,214 @@ use Caral\Modules\Checkout\Services\OrderService;
 
 class CheckoutController
 {
+    private const CHECKOUT_ORDER_ID = 'checkout_order_id';
+    private const CHECKOUT_TOKEN = 'checkout_token';
+
     public function show(): void
     {
-        $items = CartService::getItems();
+        $order = $this->recoverableOrder();
+        if ($order) {
+            if ($order['payment_status'] === 'paid') {
+                $this->redirectToConfirmation((int)$order['id']);
+            }
 
+            echo Template::render('Checkout', 'checkout', $this->viewDataFromOrder($order, [
+                'mode' => 'recovery',
+            ]));
+            return;
+        }
+
+        $items = CartService::getItems();
         if (empty($items)) {
             header('Location: /carrito');
             exit();
         }
 
-        echo Template::render('Checkout', 'checkout', $this->checkoutViewData($items));
+        echo Template::render('Checkout', 'checkout', $this->viewDataFromCart($items, [
+            'mode' => 'details',
+        ]));
     }
 
     public function process(): void
     {
-        $items = CartService::getItems();
+        $order = $this->recoverableOrder();
+        if ($order && in_array($order['payment_status'], ['pending', 'payment_started', 'authorized'], true)) {
+            header('Location: ' . $this->paymentUrl((int)$order['id'], (string)Session::get(self::CHECKOUT_TOKEN)));
+            exit();
+        }
 
+        $items = CartService::getItems();
         if (empty($items)) {
             header('Location: /carrito');
             exit();
         }
 
-        $name = trim($_POST['name'] ?? '');
-        $email = trim($_POST['email'] ?? '');
-        $phone = trim($_POST['phone'] ?? '');
-        $address = trim($_POST['address'] ?? '');
-        $district = trim($_POST['district'] ?? '');
-        $city = trim($_POST['city'] ?? 'Lima');
-        $izipayResponseRaw = trim($_POST['izipay_response'] ?? '');
-        $izipayOrderNumber = trim($_POST['izipay_order_number'] ?? '');
+        $customerData = $this->customerDataFromPost();
+        $errors = $this->validateCustomerData($customerData);
 
-        $errors = [];
-
-        if (strlen($name) < 3) {
-            $errors[] = 'El nombre completo es requerido.';
-        }
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $errors[] = 'El correo electronico no es valido.';
-        }
-        if ($address === '') {
-            $errors[] = 'La direccion de envio es requerida.';
-        }
-        if ($district === '') {
-            $errors[] = 'El distrito es requerido.';
-        }
-        if ($izipayResponseRaw === '') {
-            $errors[] = 'No se recibio la respuesta de Izipay. Intente nuevamente.';
-        }
-
-        $paymentResponse = null;
-        if ($izipayResponseRaw !== '') {
-            try {
-                $paymentResponse = IzipayService::decodeResponse($izipayResponseRaw);
-                if (!IzipayService::isApproved($paymentResponse)) {
-                    $errors[] = $paymentResponse['messageUser'] ?? 'Izipay no aprobo la transaccion.';
-                }
-            } catch (\RuntimeException $e) {
-                $errors[] = $e->getMessage();
-            }
-        }
-
-        if (!empty($errors)) {
-            echo Template::render('Checkout', 'checkout', $this->checkoutViewData($items, [
+        if ($errors !== []) {
+            echo Template::render('Checkout', 'checkout', $this->viewDataFromCart($items, [
+                'mode' => 'details',
                 'errors' => $errors,
                 'old' => $_POST,
-                'orderNumber' => $izipayOrderNumber ?: OrderService::generateOrderNumber(),
             ]));
             return;
         }
 
         try {
-            $orderId = OrderService::createFromCart([
-                'order_number' => IzipayService::orderNumber($paymentResponse ?? []) ?: $izipayOrderNumber ?: OrderService::generateOrderNumber(),
-                'payment_method' => 'izipay',
-                'name' => $name,
-                'email' => $email,
-                'phone' => $phone,
-                'address' => $address,
-                'district' => $district,
-                'city' => $city,
-            ]);
+            $checkoutToken = OrderService::generateCheckoutToken();
+            $orderId = OrderService::createPendingFromCart($customerData, $checkoutToken);
+            $this->setCheckoutSession($orderId, $checkoutToken);
 
-            OrderService::markAsPaid(
-                $orderId,
-                IzipayService::operationId($paymentResponse ?? []),
-                $paymentResponse ?? []
-            );
-
-            $this->completeCart();
-
-            Session::set('last_order_id', $orderId);
-            header('Location: /checkout/confirmacion');
+            header('Location: ' . $this->paymentUrl($orderId, $checkoutToken));
             exit();
         } catch (\Throwable $e) {
-            Session::set('checkout_error', 'No se pudo completar tu orden: ' . $e->getMessage());
+            echo Template::render('Checkout', 'checkout', $this->viewDataFromCart($items, [
+                'mode' => 'details',
+                'errors' => ['No se pudo iniciar el pago: ' . $e->getMessage()],
+                'old' => $_POST,
+            ]));
+        }
+    }
+
+    public function payment(): void
+    {
+        $order = $this->recoverableOrder();
+        if (!$order) {
+            header('Location: /carrito');
+            exit();
+        }
+
+        if ($order['payment_status'] === 'paid') {
+            $this->redirectToConfirmation((int)$order['id']);
+        }
+
+        if (in_array($order['payment_status'], ['cancelled', 'failed'], true)) {
+            Session::set('checkout_error', 'Esta orden ya no se puede continuar. Inicia una nueva compra desde el carrito.');
             header('Location: /checkout/error');
             exit();
+        }
+
+        $items = OrderService::getItems((int)$order['id']);
+        try {
+            $payment = IzipayService::createFormToken($order, $items);
+            OrderService::markPaymentStarted((int)$order['id'], [
+                'provider' => 'izipay_formtoken',
+                'createPayment' => $payment['response'],
+            ]);
+
+            echo Template::render('Checkout', 'checkout', $this->viewDataFromOrder($order, [
+                'mode' => 'payment',
+                'izipay' => [
+                    'formToken' => $payment['formToken'],
+                    'publicKey' => IzipayService::publicKey(),
+                    'scriptUrl' => IzipayService::kryptonScriptUrl(),
+                    'classicCssUrl' => IzipayService::kryptonClassicCssUrl(),
+                    'classicJsUrl' => IzipayService::kryptonClassicJsUrl(),
+                    'postUrlSuccess' => '/checkout/izipay/resultado',
+                ],
+            ]));
+        } catch (\Throwable $e) {
+            echo Template::render('Checkout', 'checkout', $this->viewDataFromOrder($order, [
+                'mode' => 'recovery',
+                'errors' => ['No se pudo generar el formulario de pago: ' . $e->getMessage()],
+            ]));
+        }
+    }
+
+    public function cancel(): void
+    {
+        $order = $this->recoverableOrder();
+        if ($order) {
+            OrderService::cancelPending((int)$order['id']);
+        }
+
+        $this->clearCheckoutSession();
+        header('Location: /carrito');
+        exit();
+    }
+
+    public function result(): void
+    {
+        try {
+            if ($_POST === []) {
+                throw new \RuntimeException('No se recibio respuesta de Izipay.');
+            }
+
+            if (!IzipayService::validateFrontendHash($_POST)) {
+                throw new \RuntimeException('Firma de respuesta Izipay invalida.');
+            }
+
+            $answer = IzipayService::decodeAnswer($_POST);
+            $orderNumber = IzipayService::orderId($answer);
+            $order = $orderNumber !== '' ? OrderService::findByOrderNumber($orderNumber) : null;
+            if (!$order) {
+                throw new \RuntimeException('No se encontro la orden asociada al pago.');
+            }
+
+            $status = IzipayService::orderStatus($answer);
+            OrderService::markFrontendResult((int)$order['id'], $status, [
+                'post' => $_POST,
+                'answer' => $answer,
+            ]);
+
+            if (IzipayService::isPaid($answer) || $order['payment_status'] === 'paid') {
+                $this->redirectToConfirmation((int)$order['id']);
+            }
+
+            $this->clearCheckoutSession();
+            Session::set('checkout_error', 'Izipay no aprobo la transaccion. Estado: ' . ($status ?: 'desconocido'));
+            header('Location: /checkout/error');
+            exit();
+        } catch (\Throwable $e) {
+            Session::set('checkout_error', 'No se pudo validar la respuesta de Izipay: ' . $e->getMessage());
+            header('Location: /checkout/error');
+            exit();
+        }
+    }
+
+    public function ipn(): void
+    {
+        header('Content-Type: text/plain; charset=utf-8');
+
+        try {
+            if ($_POST === []) {
+                http_response_code(400);
+                echo 'No post data received';
+                return;
+            }
+
+            if (!IzipayService::validateIpnHash($_POST)) {
+                http_response_code(400);
+                echo 'Invalid signature';
+                return;
+            }
+
+            $answer = IzipayService::decodeAnswer($_POST);
+            $orderNumber = IzipayService::orderId($answer);
+            $order = $orderNumber !== '' ? OrderService::findByOrderNumber($orderNumber) : null;
+            if (!$order) {
+                http_response_code(404);
+                echo 'Order not found';
+                return;
+            }
+
+            $orderId = (int)$order['id'];
+            OrderService::markIpnResult($orderId, [
+                'post' => $_POST,
+                'answer' => $answer,
+            ]);
+
+            if (IzipayService::isPaid($answer)) {
+                OrderService::markAsPaid($orderId, IzipayService::transactionUuid($answer), $answer);
+            } else {
+                OrderService::markAsFailed($orderId, $answer);
+            }
+
+            echo 'OK! OrderStatus is ' . IzipayService::orderStatus($answer);
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            echo 'IPN error';
         }
     }
 
@@ -137,35 +249,74 @@ class CheckoutController
         ]);
     }
 
-    private function checkoutViewData(array $items, array $overrides = []): array
+    private function recoverableOrder(): ?array
+    {
+        $orderId = (int)($_GET['order'] ?? Session::get(self::CHECKOUT_ORDER_ID, 0));
+        $token = (string)($_GET['token'] ?? Session::get(self::CHECKOUT_TOKEN, ''));
+
+        if ($orderId <= 0 || $token === '') {
+            return null;
+        }
+
+        $order = OrderService::findByCheckoutToken($orderId, $token);
+        if (!$order) {
+            $this->clearCheckoutSession();
+            return null;
+        }
+
+        $this->setCheckoutSession($orderId, $token);
+        return $order;
+    }
+
+    private function customerDataFromPost(): array
+    {
+        return [
+            'name' => trim($_POST['name'] ?? ''),
+            'email' => trim($_POST['email'] ?? ''),
+            'phone' => trim($_POST['phone'] ?? ''),
+            'document_type' => trim($_POST['document_type'] ?? 'DNI'),
+            'document' => trim($_POST['document'] ?? ''),
+            'address' => trim($_POST['address'] ?? ''),
+            'district' => trim($_POST['district'] ?? ''),
+            'city' => trim($_POST['city'] ?? 'Lima'),
+        ];
+    }
+
+    private function validateCustomerData(array $data): array
+    {
+        $errors = [];
+        if (strlen($data['name']) < 3) {
+            $errors[] = 'El nombre completo es requerido.';
+        }
+        if (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+            $errors[] = 'El correo electronico no es valido.';
+        }
+        if ($data['document'] === '') {
+            $errors[] = 'El documento de identidad es requerido.';
+        }
+        if ($data['address'] === '') {
+            $errors[] = 'La direccion de envio es requerida.';
+        }
+        if ($data['district'] === '') {
+            $errors[] = 'El distrito es requerido.';
+        }
+
+        return $errors;
+    }
+
+    private function viewDataFromCart(array $items, array $overrides = []): array
     {
         $subtotal = 0;
         foreach ($items as $item) {
             $subtotal += $item['price_seen'] * $item['quantity'];
         }
 
-        $orderNumber = $overrides['orderNumber'] ?? OrderService::generatePaymentOrderNumber();
-        $transactionId = 'LP' . date('YmdHis') . random_int(1000, 9999);
-        $dateTimeTransaction = date('YmdHis');
-        try {
-            $izipay = IzipayService::publicConfig([
-                'transactionId' => $transactionId,
-                'orderNumber' => $orderNumber,
-                'amount' => $subtotal,
-            ]);
-        } catch (\RuntimeException $e) {
-            $izipay = IzipayService::publicConfig();
-            $overrides['errors'][] = $e->getMessage();
-        }
-        $izipay['orderNumber'] = $orderNumber;
-        $izipay['transactionId'] = $transactionId;
-        $izipay['dateTimeTransaction'] = $dateTimeTransaction;
-
         return array_merge([
             'items' => $items,
             'subtotal' => $subtotal,
             'total' => $subtotal,
-            'izipay' => $izipay,
+            'order' => null,
+            'izipay' => [],
             'user' => [
                 'name' => Session::getUserName(),
                 'email' => Session::getUserEmail(),
@@ -173,18 +324,47 @@ class CheckoutController
         ], $overrides);
     }
 
-    private function completeCart(): void
+    private function viewDataFromOrder(array $order, array $overrides = []): array
     {
-        try {
-            $db = \Caral\Core\Database::getConnection();
-            $cartId = CartService::getActiveCartId();
-            if ($cartId > 0) {
-                $db->prepare("UPDATE shopping_carts SET status = 'completed' WHERE id = :id")
-                   ->execute(['id' => $cartId]);
-            }
-        } catch (\Throwable) {
-            // No bloquear el flujo por esto.
-        }
+        $token = (string)Session::get(self::CHECKOUT_TOKEN, '');
+
+        return array_merge([
+            'items' => OrderService::getItems((int)$order['id']),
+            'subtotal' => (float)$order['subtotal'],
+            'total' => (float)$order['total'],
+            'order' => $order,
+            'paymentUrl' => $this->paymentUrl((int)$order['id'], $token),
+            'cancelUrl' => '/checkout/cancelar',
+            'izipay' => [],
+            'user' => [
+                'name' => $order['customer_name'],
+                'email' => $order['customer_email'],
+            ],
+        ], $overrides);
+    }
+
+    private function paymentUrl(int $orderId, string $token): string
+    {
+        return '/checkout/pago?order=' . $orderId . '&token=' . urlencode($token);
+    }
+
+    private function setCheckoutSession(int $orderId, string $token): void
+    {
+        Session::set(self::CHECKOUT_ORDER_ID, $orderId);
+        Session::set(self::CHECKOUT_TOKEN, $token);
+    }
+
+    private function clearCheckoutSession(): void
+    {
+        Session::remove(self::CHECKOUT_ORDER_ID);
+        Session::remove(self::CHECKOUT_TOKEN);
+    }
+
+    private function redirectToConfirmation(int $orderId): void
+    {
+        Session::set('last_order_id', $orderId);
+        $this->clearCheckoutSession();
+        header('Location: /checkout/confirmacion');
+        exit();
     }
 }
-

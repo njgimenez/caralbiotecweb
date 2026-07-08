@@ -4,94 +4,88 @@ namespace Caral\Modules\Checkout\Services;
 
 class IzipayService
 {
-    public static function sdkUrl(): string
+    public static function publicKey(): string
     {
-        $env = self::env();
-        return $env === 'production'
-            ? 'https://checkout.izipay.pe/payments/v1/js/index.js'
-            : 'https://sandbox-checkout.izipay.pe/payments/v1/js/index.js';
+        return trim((string)($_ENV['IZIPAY_PUBLIC_KEY'] ?? ''));
     }
 
-    public static function tokenEndpoint(): string
+    public static function kryptonScriptUrl(): string
     {
-        $customUrl = trim((string)($_ENV['IZIPAY_TOKEN_ENDPOINT'] ?? ''));
-        if ($customUrl !== '') {
-            return $customUrl;
-        }
-
-        return self::env() === 'production'
-            ? 'https://api-pw.izipay.pe/security/v1/Token/Generate'
-            : 'https://sandbox-api-pw.izipay.pe/security/v1/Token/Generate';
+        return (string)($_ENV['IZIPAY_KRYPTON_SCRIPT_URL'] ?? 'https://static.micuentaweb.pe/static/js/krypton-client/V4.0/stable/kr-payment-form.min.js');
     }
 
-    public static function isDemoMode(): bool
+    public static function kryptonClassicCssUrl(): string
     {
-        $value = strtolower((string)($_ENV['IZIPAY_DEMO_MODE'] ?? 'true'));
-        return in_array($value, ['1', 'true', 'yes', 'on'], true);
+        return (string)($_ENV['IZIPAY_KRYPTON_CSS_URL'] ?? 'https://static.micuentaweb.pe/static/js/krypton-client/V4.0/ext/classic.css');
     }
 
-    public static function publicConfig(array $tokenContext = []): array
+    public static function kryptonClassicJsUrl(): string
     {
-        $config = [
-            'env' => self::env(),
-            'sdkUrl' => self::sdkUrl(),
-            'merchantCode' => (string)($_ENV['IZIPAY_MERCHANT_CODE'] ?? ''),
-            'tokenSession' => (string)($_ENV['IZIPAY_TOKEN_SESSION'] ?? ''),
-            'keyRSA' => self::normalizeKey((string)($_ENV['IZIPAY_KEY_RSA'] ?? '')),
-            'demoMode' => self::isDemoMode(),
-        ];
-
-        if (!$config['demoMode'] && $config['tokenSession'] === '' && $tokenContext !== []) {
-            $config['tokenSession'] = self::generateTokenSession($tokenContext);
-        }
-
-        return $config;
+        return (string)($_ENV['IZIPAY_KRYPTON_CLASSIC_URL'] ?? 'https://static.micuentaweb.pe/static/js/krypton-client/V4.0/ext/classic.js');
     }
 
-    public static function generateTokenSession(array $context): string
+    public static function createPaymentEndpoint(): string
     {
-        $merchantCode = trim((string)($_ENV['IZIPAY_MERCHANT_CODE'] ?? ''));
-        $apiKey = trim((string)($_ENV['IZIPAY_API_KEY'] ?? ''));
+        return (string)($_ENV['IZIPAY_CREATE_PAYMENT_ENDPOINT'] ?? 'https://api.micuentaweb.pe/api-payment/V4/Charge/CreatePayment');
+    }
 
-        if ($merchantCode === '') {
-            throw new \RuntimeException('IZIPAY_MERCHANT_CODE no esta configurado.');
-        }
+    public static function createFormToken(array $order, array $items): array
+    {
+        self::assertCredentials();
 
-        if ($apiKey === '') {
-            throw new \RuntimeException('IZIPAY_API_KEY no esta configurado para generar el token de sesion.');
-        }
-
-        $transactionId = (string)($context['transactionId'] ?? '');
-        $orderNumber = (string)($context['orderNumber'] ?? '');
-        $amount = number_format((float)($context['amount'] ?? 0), 2, '.', '');
-
-        if ($transactionId === '' || $orderNumber === '' || (float)$amount <= 0) {
-            throw new \RuntimeException('Faltan datos de transaccion para generar el token de sesion Izipay.');
-        }
-
-        $payload = [
-            'requestSource' => (string)($_ENV['IZIPAY_REQUEST_SOURCE'] ?? 'ECOMMERCE'),
-            'merchantCode' => $merchantCode,
-            'orderNumber' => $orderNumber,
-            'publicKey' => $apiKey,
-            'amount' => $amount,
-        ];
-
-        $ch = curl_init(self::tokenEndpoint());
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
-            CURLOPT_HTTPHEADER => [
-                'Content-Type: application/json',
-                'Accept: application/json',
-                'transactionId: ' . $transactionId,
+        $body = [
+            'amount' => (int)round(((float)$order['total']) * 100),
+            'currency' => (string)($order['currency'] ?? 'PEN'),
+            'orderId' => (string)$order['order_number'],
+            'customer' => [
+                'email' => (string)$order['customer_email'],
+                'billingDetails' => [
+                    'firstName' => self::firstName((string)$order['customer_name']),
+                    'lastName' => self::lastName((string)$order['customer_name']),
+                    'phoneNumber' => (string)($order['customer_phone'] ?? ''),
+                    'identityType' => (string)($order['customer_document_type'] ?? 'DNI'),
+                    'identityCode' => (string)($order['customer_document'] ?? '00000000'),
+                    'address' => (string)($order['shipping_address'] ?? ''),
+                    'country' => 'PE',
+                    'city' => (string)($order['shipping_city'] ?? 'Lima'),
+                    'state' => (string)($order['shipping_district'] ?? 'Lima'),
+                    'zipCode' => (string)($_ENV['IZIPAY_DEFAULT_ZIP_CODE'] ?? '15000'),
+                ],
             ],
+            'metadata' => [
+                'orderId' => (string)$order['id'],
+                'source' => 'caral-web',
+            ],
+        ];
+
+        if ($items !== []) {
+            $body['shoppingCart'] = [
+                'cartItemInfo' => array_map(static function (array $item): array {
+                    return [
+                        'productLabel' => (string)($item['product_name'] ?? $item['name'] ?? 'Producto'),
+                        'productAmount' => (int)round(((float)($item['unit_price'] ?? $item['price_seen'] ?? 0)) * 100),
+                        'productQty' => (int)($item['quantity'] ?? 1),
+                    ];
+                }, $items),
+            ];
+        }
+
+        $ch = curl_init(self::createPaymentEndpoint());
+        curl_setopt_array($ch, [
+            CURLOPT_HEADER => false,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => [
+                'Authorization: Basic ' . base64_encode(self::username() . ':' . self::password()),
+                'Content-Type: application/json',
+            ],
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode($body, JSON_UNESCAPED_UNICODE),
             CURLOPT_TIMEOUT => 30,
+            CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_SSL_VERIFYPEER => true,
         ]);
 
-        $response = curl_exec($ch);
+        $rawResponse = curl_exec($ch);
         $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlError = curl_error($ch);
         curl_close($ch);
@@ -100,70 +94,119 @@ class IzipayService
             throw new \RuntimeException('No se pudo conectar con Izipay: ' . $curlError);
         }
 
-        $data = json_decode((string)$response, true);
-        if (!is_array($data)) {
-            throw new \RuntimeException('Respuesta invalida de Izipay al generar token de sesion.');
+        $response = json_decode((string)$rawResponse, true);
+        if (!is_array($response)) {
+            throw new \RuntimeException('Respuesta invalida de Izipay al crear el formToken.');
         }
 
-        $token = $data['response']['token'] ?? $data['token'] ?? null;
-        if ($httpCode < 200 || $httpCode >= 300 || !is_string($token) || $token === '') {
-            $message = $data['message'] ?? $data['messageUser'] ?? 'No se pudo generar el token de sesion Izipay.';
+        $formToken = $response['answer']['formToken'] ?? null;
+        if ($httpCode < 200 || $httpCode >= 300 || !is_string($formToken) || $formToken === '') {
+            $message = $response['answer']['errorMessage']
+                ?? $response['answer']['detailedErrorMessage']
+                ?? $response['message']
+                ?? 'No se pudo crear el formToken de Izipay.';
             throw new \RuntimeException($message . ' HTTP ' . $httpCode);
         }
 
-        return $token;
+        return [
+            'formToken' => $formToken,
+            'request' => $body,
+            'response' => $response,
+        ];
     }
 
-    public static function decodeResponse(string $raw): array
+    public static function validateFrontendHash(array $post): bool
     {
-        $data = json_decode($raw, true);
-        if (!is_array($data)) {
-            throw new \RuntimeException('La respuesta de Izipay no es valida.');
+        return self::validateHash($post, self::hmacKey());
+    }
+
+    public static function validateIpnHash(array $post): bool
+    {
+        return self::validateHash($post, self::password());
+    }
+
+    public static function decodeAnswer(array $post): array
+    {
+        $raw = (string)($post['kr-answer'] ?? '');
+        $answer = json_decode(str_replace('\/', '/', $raw), true);
+        if (!is_array($answer)) {
+            throw new \RuntimeException('La respuesta de Izipay no contiene un kr-answer valido.');
         }
 
-        return $data;
+        return $answer;
     }
 
-    public static function isApproved(array $response): bool
+    public static function orderStatus(array $answer): string
     {
-        $code = (string)($response['code'] ?? '');
-        if (in_array($code, ['00', '000'], true)) {
-            return true;
+        return strtoupper((string)($answer['orderStatus'] ?? ''));
+    }
+
+    public static function orderId(array $answer): string
+    {
+        return (string)($answer['orderDetails']['orderId'] ?? '');
+    }
+
+    public static function transactionUuid(array $answer): string
+    {
+        $transaction = $answer['transactions'][0] ?? [];
+        return (string)($transaction['uuid'] ?? '');
+    }
+
+    public static function isPaid(array $answer): bool
+    {
+        return self::orderStatus($answer) === 'PAID';
+    }
+
+    private static function validateHash(array $post, string $key): bool
+    {
+        if ($key === '' || empty($post['kr-answer']) || empty($post['kr-hash'])) {
+            return false;
         }
 
-        $order = $response['response']['order'][0] ?? [];
-        return strcasecmp((string)($order['stateMessage'] ?? ''), 'Autorizado') === 0;
+        $krAnswer = str_replace('\/', '/', (string)$post['kr-answer']);
+        $calculated = hash_hmac('sha256', $krAnswer, $key);
+        return hash_equals($calculated, (string)$post['kr-hash']);
     }
 
-    public static function operationId(array $response): string
+    private static function assertCredentials(): void
     {
-        $order = $response['response']['order'][0] ?? [];
-        return (string)(
-            $order['uniqueId']
-            ?? $order['referenceNumber']
-            ?? $response['transactionId']
-            ?? 'IZIPAY-DEMO-' . date('YmdHis')
-        );
-    }
-
-    public static function orderNumber(array $response): ?string
-    {
-        $orderNumber = $response['response']['order'][0]['orderNumber'] ?? null;
-        return is_string($orderNumber) && $orderNumber !== '' ? $orderNumber : null;
-    }
-
-    private static function env(): string
-    {
-        return strtolower((string)($_ENV['IZIPAY_ENV'] ?? 'sandbox')) === 'production' ? 'production' : 'sandbox';
-    }
-
-    private static function normalizeKey(string $value): string
-    {
-        $value = trim($value);
-        if ($value === '') {
-            return '';
+        foreach ([
+            'IZIPAY_USERNAME' => self::username(),
+            'IZIPAY_PASSWORD' => self::password(),
+            'IZIPAY_PUBLIC_KEY' => self::publicKey(),
+            'IZIPAY_HMAC_SHA256' => self::hmacKey(),
+        ] as $name => $value) {
+            if ($value === '') {
+                throw new \RuntimeException($name . ' no esta configurado.');
+            }
         }
+    }
 
-        return str_replace(["\\n", "\r\n", "\r"], "\n", $value);
+    private static function username(): string
+    {
+        return trim((string)($_ENV['IZIPAY_USERNAME'] ?? ''));
+    }
+
+    private static function password(): string
+    {
+        return trim((string)($_ENV['IZIPAY_PASSWORD'] ?? ''));
+    }
+
+    private static function hmacKey(): string
+    {
+        return trim((string)($_ENV['IZIPAY_HMAC_SHA256'] ?? ''));
+    }
+
+    private static function firstName(string $name): string
+    {
+        $parts = preg_split('/\s+/', trim($name)) ?: [];
+        return $parts[0] ?? 'Cliente';
+    }
+
+    private static function lastName(string $name): string
+    {
+        $parts = preg_split('/\s+/', trim($name)) ?: [];
+        array_shift($parts);
+        return trim(implode(' ', $parts)) ?: 'Caral';
     }
 }

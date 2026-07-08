@@ -45,6 +45,10 @@ $router->get('/carrito/eliminar/([0-9]+)',    'Cart\Controllers\CartController@d
 // Checkout y pago
 $router->get('/checkout',                     'Checkout\Controllers\CheckoutController@show');
 $router->post('/checkout/procesar',           'Checkout\Controllers\CheckoutController@process');
+$router->get('/checkout/pago',                'Checkout\Controllers\CheckoutController@payment');
+$router->post('/checkout/cancelar',           'Checkout\Controllers\CheckoutController@cancel');
+$router->post('/checkout/izipay/resultado',   'Checkout\Controllers\CheckoutController@result');
+$router->post('/checkout/izipay/ipn',         'Checkout\Controllers\CheckoutController@ipn');
 $router->get('/checkout/confirmacion',        'Checkout\Controllers\CheckoutController@confirmation');
 $router->get('/checkout/error',               'Checkout\Controllers\CheckoutController@paymentError');
 
