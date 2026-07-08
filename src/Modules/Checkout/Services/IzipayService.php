@@ -163,9 +163,18 @@ class IzipayService
             return false;
         }
 
-        $krAnswer = str_replace('\/', '/', (string)$post['kr-answer']);
-        $calculated = hash_hmac('sha256', $krAnswer, $key);
-        return hash_equals($calculated, (string)$post['kr-hash']);
+        $receivedHash = strtolower((string)$post['kr-hash']);
+        $rawAnswer = (string)$post['kr-answer'];
+        $normalizedAnswer = str_replace('\/', '/', $rawAnswer);
+
+        foreach (array_unique([$rawAnswer, $normalizedAnswer]) as $answer) {
+            $calculated = hash_hmac('sha256', $answer, $key);
+            if (hash_equals($calculated, $receivedHash)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static function assertCredentials(): void
