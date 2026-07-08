@@ -117,12 +117,18 @@ class IzipayService
 
     public static function validateFrontendHash(array $post): bool
     {
-        return self::validateHash($post, self::hmacKey());
+        return self::validateHashWithCandidates($post, [
+            'sha256_hmac' => self::hmacKey(),
+            'password' => self::password(),
+        ]);
     }
 
     public static function validateIpnHash(array $post): bool
     {
-        return self::validateHash($post, self::password());
+        return self::validateHashWithCandidates($post, [
+            'password' => self::password(),
+            'sha256_hmac' => self::hmacKey(),
+        ]);
     }
 
     public static function decodeAnswer(array $post): array
@@ -157,9 +163,30 @@ class IzipayService
         return self::orderStatus($answer) === 'PAID';
     }
 
+    private static function validateHashWithCandidates(array $post, array $keys): bool
+    {
+        if (empty($post['kr-answer']) || empty($post['kr-hash'])) {
+            return false;
+        }
+
+        $hashKey = strtolower((string)($post['kr-hash-key'] ?? ''));
+        if (isset($keys[$hashKey]) && self::validateHash($post, $keys[$hashKey])) {
+            return true;
+        }
+
+        foreach ($keys as $key) {
+            if (self::validateHash($post, $key)) {
+                return true;
+            }
+        }
+
+        self::logHashMismatch($post, array_keys($keys));
+        return false;
+    }
+
     private static function validateHash(array $post, string $key): bool
     {
-        if ($key === '' || empty($post['kr-answer']) || empty($post['kr-hash'])) {
+        if ($key === '') {
             return false;
         }
 
@@ -175,6 +202,23 @@ class IzipayService
         }
 
         return false;
+    }
+
+    private static function logHashMismatch(array $post, array $candidateNames): void
+    {
+        $rawAnswer = (string)($post['kr-answer'] ?? '');
+        $answer = json_decode(str_replace('\/', '/', $rawAnswer), true);
+        $orderId = is_array($answer) ? (string)($answer['orderDetails']['orderId'] ?? '') : '';
+
+        error_log('[Izipay] Hash mismatch ' . json_encode([
+            'orderId' => $orderId,
+            'krHashKey' => (string)($post['kr-hash-key'] ?? ''),
+            'krHashAlgorithm' => (string)($post['kr-hash-algorithm'] ?? ''),
+            'krAnswerType' => (string)($post['kr-answer-type'] ?? ''),
+            'answerLength' => strlen($rawAnswer),
+            'hashPrefix' => substr((string)($post['kr-hash'] ?? ''), 0, 12),
+            'candidateKeys' => $candidateNames,
+        ], JSON_UNESCAPED_UNICODE));
     }
 
     private static function assertCredentials(): void
