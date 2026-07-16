@@ -5,6 +5,7 @@ namespace Caral\Modules\Checkout\Controllers;
 use Caral\Core\Session;
 use Caral\Core\Template;
 use Caral\Modules\Cart\Services\CartService;
+use Caral\Modules\Checkout\Services\DeliveryService;
 use Caral\Modules\Checkout\Services\IzipayService;
 use Caral\Modules\Checkout\Services\OrderService;
 
@@ -161,7 +162,12 @@ class CheckoutController
                 'answer' => $answer,
             ]);
 
-            if (IzipayService::isPaid($answer) || $order['payment_status'] === 'paid') {
+            if (IzipayService::isPaid($answer)) {
+                OrderService::markAsPaid((int)$order['id'], IzipayService::transactionUuid($answer), $answer);
+                $this->redirectToConfirmation((int)$order['id']);
+            }
+
+            if ($order['payment_status'] === 'paid') {
                 $this->redirectToConfirmation((int)$order['id']);
             }
 
@@ -276,9 +282,11 @@ class CheckoutController
             'phone' => trim($_POST['phone'] ?? ''),
             'document_type' => trim($_POST['document_type'] ?? 'DNI'),
             'document' => trim($_POST['document'] ?? ''),
+            'fulfillment_method' => ($_POST['fulfillment_method'] ?? 'delivery') === 'pickup' ? 'pickup' : 'delivery',
             'address' => trim($_POST['address'] ?? ''),
             'district' => trim($_POST['district'] ?? ''),
-            'city' => trim($_POST['city'] ?? 'Lima'),
+            'city' => DeliveryService::normalizeCity(trim($_POST['city'] ?? 'Lima')),
+            'courier' => strtoupper(trim($_POST['courier'] ?? '')),
         ];
     }
 
@@ -294,11 +302,20 @@ class CheckoutController
         if ($data['document'] === '') {
             $errors[] = 'El documento de identidad es requerido.';
         }
-        if ($data['address'] === '') {
-            $errors[] = 'La direccion de envio es requerida.';
-        }
-        if ($data['district'] === '') {
-            $errors[] = 'El distrito es requerido.';
+        if ($data['fulfillment_method'] === 'delivery') {
+            if ($data['address'] === '') {
+                $errors[] = 'La direccion de envio es requerida.';
+            }
+
+            if (DeliveryService::isLimaCity((string)$data['city'])) {
+                if ($data['district'] === '') {
+                    $errors[] = 'El distrito es requerido para envios en Lima.';
+                } elseif (!DeliveryService::findDistrict($data['district'])) {
+                    $errors[] = 'Selecciona un distrito valido para delivery en Lima.';
+                }
+            } elseif (!in_array((string)$data['courier'], DeliveryService::provinceCourierOptions(), true)) {
+                $errors[] = 'Selecciona el courier para envio a provincia: OLVA o SHALOM.';
+            }
         }
 
         return $errors;
@@ -314,9 +331,13 @@ class CheckoutController
         return array_merge([
             'items' => $items,
             'subtotal' => $subtotal,
+            'shipping' => 0,
             'total' => $subtotal,
             'order' => null,
             'izipay' => [],
+            'deliveryOptions' => DeliveryService::publicOptions(),
+            'cityOptions' => DeliveryService::peruCities(),
+            'provinceHandlingFee' => DeliveryService::provinceHandlingFee(),
             'user' => [
                 'name' => Session::getUserName(),
                 'email' => Session::getUserEmail(),
@@ -331,11 +352,15 @@ class CheckoutController
         return array_merge([
             'items' => OrderService::getItems((int)$order['id']),
             'subtotal' => (float)$order['subtotal'],
+            'shipping' => (float)$order['shipping_cost'],
             'total' => (float)$order['total'],
             'order' => $order,
             'paymentUrl' => $this->paymentUrl((int)$order['id'], $token),
             'cancelUrl' => '/checkout/cancelar',
             'izipay' => [],
+            'deliveryOptions' => DeliveryService::publicOptions(),
+            'cityOptions' => DeliveryService::peruCities(),
+            'provinceHandlingFee' => DeliveryService::provinceHandlingFee(),
             'user' => [
                 'name' => $order['customer_name'],
                 'email' => $order['customer_email'],

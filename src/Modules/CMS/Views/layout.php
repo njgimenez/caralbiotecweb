@@ -16,6 +16,12 @@
     <link href="/css/style.css" rel="stylesheet">
 </head>
 <body>
+<?php
+$companyPhone = $this->companyPhone();
+$companyWhatsappUrl = $this->companyWhatsappUrl();
+$companyEmail = $this->companyEmail();
+$companyAddress = $this->companyAddress();
+?>
 
 <!-- ── 1. Announcement Bar ── -->
 <div class="announcement-bar">
@@ -85,12 +91,12 @@
             <div class="col-6 col-md-4 col-lg-5 order-2 order-md-3 d-flex justify-content-end align-items-center gap-2 gap-lg-3">
 
                 <!-- WhatsApp -->
-                <a href="https://wa.me/51947123456" target="_blank"
+                <a href="<?= $this->e($companyWhatsappUrl) ?>" target="_blank"
                    class="d-none d-xl-flex align-items-center text-decoration-none gap-1">
                     <i class="bi bi-whatsapp header-action-icon" style="color:var(--green-700)"></i>
                     <div>
                         <span class="d-block fw-bold" style="font-size:.75rem;color:var(--green-700)">WhatsApp</span>
-                        <span class="text-muted" style="font-size:.7rem">+51 947 123 456</span>
+                        <span class="text-muted" style="font-size:.7rem"><?= $this->e($companyPhone) ?></span>
                     </div>
                 </a>
 
@@ -155,8 +161,8 @@
             </li>
             <li class="nav-item"><a class="nav-link nav-link-custom" href="/productos">Ofertas</a></li>
             <li class="nav-item"><a class="nav-link nav-link-custom" href="/blog">Blog</a></li>
-            <li class="nav-item"><a class="nav-link nav-link-custom" href="#">Nosotros</a></li>
-            <li class="nav-item"><a class="nav-link nav-link-custom" href="#">Contacto</a></li>
+            <li class="nav-item"><a class="nav-link nav-link-custom" href="/nosotros">Nosotros</a></li>
+            <li class="nav-item"><a class="nav-link nav-link-custom" href="/contacto">Contacto</a></li>
         </ul>
     </div>
 </nav>
@@ -175,12 +181,12 @@
                     <img src="/images/logo.png" alt="Caral Biotec" class="site-logo site-logo-footer bg-white p-2 rounded-2">
                 </a>
                 <p class="mb-3" style="line-height:1.6">Productos de alta calidad diseñados para tu salud, bienestar y recuperación integral.</p>
-                <p class="mb-1"><i class="bi bi-geo-alt-fill me-2 footer-contact-icon"></i>Lima, Perú</p>
-                <p class="mb-3"><i class="bi bi-envelope-fill me-2 footer-contact-icon"></i>contacto@caralbiotec.com</p>
+                <p class="mb-1"><i class="bi bi-geo-alt-fill me-2 footer-contact-icon"></i><?= $this->e($companyAddress) ?></p>
+                <p class="mb-3"><i class="bi bi-envelope-fill me-2 footer-contact-icon"></i><?= $this->e($companyEmail) ?></p>
                 <div class="footer-social">
                     <a href="#" aria-label="Facebook"><i class="bi bi-facebook"></i></a>
                     <a href="#" aria-label="Instagram"><i class="bi bi-instagram"></i></a>
-                    <a href="#" aria-label="WhatsApp"><i class="bi bi-whatsapp"></i></a>
+                    <a href="<?= $this->e($companyWhatsappUrl) ?>" target="_blank" aria-label="WhatsApp"><i class="bi bi-whatsapp"></i></a>
                 </div>
             </div>
             <div class="col-6 col-md-2 col-lg-2">
@@ -218,7 +224,7 @@
         <hr class="footer-divider">
         <div class="footer-bottom d-flex flex-column flex-md-row justify-content-between align-items-center gap-2">
             <span>© 2026 Caral Biotec. Todos los derechos reservados.</span>
-            <span>Desarrollado para <strong style="color:var(--green-500)">Banahosting</strong></span>
+            <span>Desarrollado por <strong style="color:var(--green-500)">Ing. Nelson Giménez</strong></span>
         </div>
     </div>
 </footer>

@@ -1205,3 +1205,16 @@ footer h5 { color: var(--white); font-weight: 700; margin-bottom: 1.25rem; font-
     .admin-store-btn span { display: none; }
     .admin-store-btn { padding: .4rem .7rem; }
 }
+
+/* Hero carousel CMS */
+.hero-carousel { position: relative; }
+.hero-carousel .hero-slider { background-size: cover; background-position: center right; }
+.hero-carousel-control { width: 4rem; opacity: .85; }
+.hero-carousel-control .carousel-control-prev-icon,
+.hero-carousel-control .carousel-control-next-icon { background-color: rgba(31,17,60,.75); border-radius: 999px; background-size: 55%; width: 2.6rem; height: 2.6rem; }
+.hero-carousel-indicators { margin-bottom: 1rem; }
+.hero-carousel-indicators [data-bs-target] { width: 9px; height: 9px; border-radius: 50%; background-color: var(--green-700); }
+@media (max-width: 767.98px) {
+    .hero-carousel .hero-slider { background-position: center; }
+    .hero-carousel-control { display: none; }
+}

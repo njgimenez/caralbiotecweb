@@ -12,6 +12,10 @@ $statusColors = [
 ];
 ?>
 
+<div class="alert alert-info border-0 rounded-3 mb-4" style="background:#eef2ff;color:#312e81">
+    <i class="bi bi-toggle2-on me-2"></i>Mostrando ordenes del ambiente Izipay activo: <strong><?= ($activeEnvironment ?? 'test') === 'production' ? 'Produccion' : 'Desarrollo / Test' ?></strong>.
+</div>
+
 <!-- Contadores rápidos -->
 <div class="row g-3 mb-4">
     <?php foreach ($statusColors as $st => $sc): ?>
@@ -57,16 +61,17 @@ $statusColors = [
                     <th>Orden</th>
                     <th>Cliente</th>
                     <th>Total</th>
+                    <th>Entrega</th>
                     <th>Estado</th>
                     <th>Pago</th>
                     <th>Fecha</th>
-                    <th style="width:80px">Acción</th>
+                    <th style="width:195px">Acciones</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if (empty($orders)): ?>
                 <tr>
-                    <td colspan="7" class="text-center py-5 text-muted">
+                    <td colspan="8" class="text-center py-5 text-muted">
                         <i class="bi bi-inbox fs-3 d-block mb-2"></i>
                         No se encontraron órdenes.
                     </td>
@@ -87,6 +92,17 @@ $statusColors = [
                         <small class="text-muted"><?= $this->e($o['customer_email']) ?></small>
                     </td>
                     <td class="fw-bold text-success">S/. <?= $this->e(number_format($o['total'], 2)) ?></td>
+                    <td style="font-size:.82rem">
+                        <?php if (($o['fulfillment_method'] ?? 'delivery') === 'pickup'): ?>
+                            <span class="badge bg-light text-dark border">Recojo</span>
+                        <?php elseif (($o['delivery_type'] ?? '') === 'province'): ?>
+                            <span class="badge bg-warning text-dark">Provincia</span>
+                            <div class="text-muted mt-1">Courier: <?= $this->e($o['courier'] ?? '-') ?></div>
+                        <?php else: ?>
+                            <span class="badge bg-light text-dark border">Lima</span>
+                            <div class="text-muted mt-1"><?= $this->e($o['shipping_district'] ?? '') ?></div>
+                        <?php endif; ?>
+                    </td>
                     <td>
                         <span class="badge rounded-pill px-3" style="background:<?= $sc['bg'] ?>;color:<?= $sc['color'] ?>">
                             <?= $sc['label'] ?>
@@ -101,11 +117,14 @@ $statusColors = [
                         <?= date('d/m/Y H:i', strtotime($o['created_at'])) ?>
                     </td>
                     <td>
-                        <a href="/admin/ordenes/<?= $this->e($o['id']) ?>"
-                           class="btn btn-sm d-inline-flex align-items-center gap-1"
-                           style="background:#f6f3ff;color:#4b2bb0;border:none;font-weight:600;">
-                            <i class="bi bi-eye"></i>
-                        </a>
+                        <div class="d-flex gap-1">
+                            <a href="/admin/ordenes/<?= $this->e($o['id']) ?>" class="btn btn-sm d-inline-flex align-items-center gap-1" style="background:#f6f3ff;color:#4b2bb0;border:none;font-weight:600;" title="Ver orden">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            <a href="/admin/ordenes/<?= $this->e($o['id']) ?>/boleta" target="_blank" class="btn btn-sm d-inline-flex align-items-center gap-1" style="background:#ecfdf5;color:#166534;border:none;font-weight:600;" title="Ver boleta">
+                                <i class="bi bi-receipt"></i><span>Ver boleta</span>
+                            </a>
+                        </div>
                     </td>
                 </tr>
                 <?php endforeach; ?>

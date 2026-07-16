@@ -48,7 +48,7 @@
                     <div class="col-md-6">
                         <label for="btn_url" class="form-label">Enlace del Botón (URL)</label>
                         <input type="text" id="btn_url" name="btn_url" class="form-control" 
-                               value="<?= $this->e($content['btn_url'] ?? '') ?>" placeholder="Ej: https://wa.me/51947123456">
+                               value="<?= $this->e($content['btn_url'] ?? '') ?>" placeholder="Ej: https://wa.me/51939622005">
                     </div>
                 </div>
 

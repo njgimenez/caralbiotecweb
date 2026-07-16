@@ -17,8 +17,12 @@ class BlogController
         $params = [];
 
         if ($search !== '') {
-            $where[] = '(p.title LIKE :search OR p.excerpt LIKE :search OR p.tags LIKE :search)';
-            $params['search'] = '%' . $search . '%';
+            $where[] = '(p.title LIKE :search_title OR p.excerpt LIKE :search_excerpt OR p.content_html LIKE :search_content OR p.tags LIKE :search_tags)';
+            $term = '%' . $search . '%';
+            $params['search_title'] = $term;
+            $params['search_excerpt'] = $term;
+            $params['search_content'] = $term;
+            $params['search_tags'] = $term;
         }
 
         if ($tag !== '') {

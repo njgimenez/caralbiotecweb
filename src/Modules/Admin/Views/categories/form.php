@@ -43,7 +43,7 @@ $title = $isEdit ? "Editar: {$category['name']}" : 'Nueva Categoría';
 
                 <div class="mb-4">
                     <label for="cat_image" class="form-label">URL de imagen</label>
-                    <input type="text" id="cat_image" name="image_url" class="form-control"
+                    <input type="text" id="cat_image" name="image_url" class="form-control js-media-picker"
                            value="<?= $this->e($category['image_url'] ?? $_POST['image_url'] ?? '') ?>"
                            placeholder="/uploads/categoria.jpg">
                 </div>

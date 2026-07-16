@@ -2,11 +2,23 @@
 
 namespace Caral\Modules\Checkout\Services;
 
+use Caral\Modules\Admin\Services\CompanySettingsService;
+
 class IzipayService
 {
+    public static function mode(): string
+    {
+        if (method_exists(CompanySettingsService::class, 'izipayMode')) {
+            return CompanySettingsService::izipayMode();
+        }
+
+        $mode = strtolower(trim((string)($_ENV['IZIPAY_MODE'] ?? 'test')));
+        return in_array($mode, ['production', 'prod', 'live'], true) ? 'production' : 'test';
+    }
+
     public static function publicKey(): string
     {
-        return trim((string)($_ENV['IZIPAY_PUBLIC_KEY'] ?? ''));
+        return self::credential('PUBLIC_KEY');
     }
 
     public static function kryptonScriptUrl(): string
@@ -26,7 +38,7 @@ class IzipayService
 
     public static function createPaymentEndpoint(): string
     {
-        return (string)($_ENV['IZIPAY_CREATE_PAYMENT_ENDPOINT'] ?? 'https://api.micuentaweb.pe/api-payment/V4/Charge/CreatePayment');
+        return self::credential('CREATE_PAYMENT_ENDPOINT') ?: (string)($_ENV['IZIPAY_CREATE_PAYMENT_ENDPOINT'] ?? 'https://api.micuentaweb.pe/api-payment/V4/Charge/CreatePayment');
     }
 
     public static function createFormToken(array $order, array $items): array
@@ -45,16 +57,19 @@ class IzipayService
                     'phoneNumber' => (string)($order['customer_phone'] ?? ''),
                     'identityType' => (string)($order['customer_document_type'] ?? 'DNI'),
                     'identityCode' => (string)($order['customer_document'] ?? '00000000'),
-                    'address' => (string)($order['shipping_address'] ?? ''),
+                    'address' => (string)($order['shipping_address'] ?? 'Recojo en tienda'),
                     'country' => 'PE',
                     'city' => (string)($order['shipping_city'] ?? 'Lima'),
-                    'state' => (string)($order['shipping_district'] ?? 'Lima'),
+                    'state' => (string)($order['shipping_district'] ?? $order['delivery_zone'] ?? 'Lima'),
                     'zipCode' => (string)($_ENV['IZIPAY_DEFAULT_ZIP_CODE'] ?? '15000'),
                 ],
             ],
             'metadata' => [
                 'orderId' => (string)$order['id'],
                 'source' => 'caral-web',
+                'environment' => self::mode(),
+                'deliveryType' => (string)($order['delivery_type'] ?? ''),
+                'courier' => (string)($order['courier'] ?? ''),
             ],
         ];
 
@@ -112,23 +127,18 @@ class IzipayService
             'formToken' => $formToken,
             'request' => $body,
             'response' => $response,
+            'environment' => self::mode(),
         ];
     }
 
     public static function validateFrontendHash(array $post): bool
     {
-        return self::validateHashWithCandidates($post, [
-            'sha256_hmac' => self::hmacKey(),
-            'password' => self::password(),
-        ]);
+        return self::validateHashWithCandidates($post, self::hashCandidates());
     }
 
     public static function validateIpnHash(array $post): bool
     {
-        return self::validateHashWithCandidates($post, [
-            'password' => self::password(),
-            'sha256_hmac' => self::hmacKey(),
-        ]);
+        return self::validateHashWithCandidates($post, self::hashCandidates());
     }
 
     public static function decodeAnswer(array $post): array
@@ -169,18 +179,13 @@ class IzipayService
             return false;
         }
 
-        $hashKey = strtolower((string)($post['kr-hash-key'] ?? ''));
-        if (isset($keys[$hashKey]) && self::validateHash($post, $keys[$hashKey])) {
-            return true;
-        }
-
         foreach ($keys as $key) {
             if (self::validateHash($post, $key)) {
                 return true;
             }
         }
 
-        self::logHashMismatch($post, array_keys($keys));
+        self::logHashMismatch($post, $keys);
         return false;
     }
 
@@ -204,50 +209,98 @@ class IzipayService
         return false;
     }
 
-    private static function logHashMismatch(array $post, array $candidateNames): void
+    private static function logHashMismatch(array $post, array $candidateKeys): void
     {
         $rawAnswer = (string)($post['kr-answer'] ?? '');
+        $normalizedAnswer = str_replace('\/', '/', $rawAnswer);
         $answer = json_decode(str_replace('\/', '/', $rawAnswer), true);
         $orderId = is_array($answer) ? (string)($answer['orderDetails']['orderId'] ?? '') : '';
 
         error_log('[Izipay] Hash mismatch ' . json_encode([
             'orderId' => $orderId,
+            'activeMode' => self::mode(),
             'krHashKey' => (string)($post['kr-hash-key'] ?? ''),
             'krHashAlgorithm' => (string)($post['kr-hash-algorithm'] ?? ''),
             'krAnswerType' => (string)($post['kr-answer-type'] ?? ''),
             'answerLength' => strlen($rawAnswer),
+            'answerSha256Prefix' => substr(hash('sha256', $rawAnswer), 0, 12),
             'hashPrefix' => substr((string)($post['kr-hash'] ?? ''), 0, 12),
-            'candidateKeys' => $candidateNames,
+            'candidateKeys' => array_keys($candidateKeys),
+            'calculatedHashPrefixes' => self::calculatedHashPrefixes($rawAnswer, $normalizedAnswer, $candidateKeys),
         ], JSON_UNESCAPED_UNICODE));
+    }
+
+    private static function calculatedHashPrefixes(string $rawAnswer, string $normalizedAnswer, array $candidateKeys): array
+    {
+        $prefixes = [];
+        foreach ($candidateKeys as $name => $key) {
+            if ((string)$key === '') {
+                continue;
+            }
+
+            $prefixes[(string)$name] = [
+                'raw' => substr(hash_hmac('sha256', $rawAnswer, (string)$key), 0, 12),
+                'normalized' => substr(hash_hmac('sha256', $normalizedAnswer, (string)$key), 0, 12),
+            ];
+        }
+
+        return $prefixes;
     }
 
     private static function assertCredentials(): void
     {
         foreach ([
-            'IZIPAY_USERNAME' => self::username(),
-            'IZIPAY_PASSWORD' => self::password(),
-            'IZIPAY_PUBLIC_KEY' => self::publicKey(),
-            'IZIPAY_HMAC_SHA256' => self::hmacKey(),
+            'USERNAME' => self::username(),
+            'PASSWORD' => self::password(),
+            'PUBLIC_KEY' => self::publicKey(),
+            'HMAC_SHA256' => self::hmacKey(),
         ] as $name => $value) {
             if ($value === '') {
-                throw new \RuntimeException($name . ' no esta configurado.');
+                throw new \RuntimeException('IZIPAY_' . strtoupper(self::mode()) . '_' . $name . ' no esta configurado.');
             }
         }
     }
 
-    private static function username(): string
+    private static function username(?string $mode = null): string
     {
-        return trim((string)($_ENV['IZIPAY_USERNAME'] ?? ''));
+        return self::credential('USERNAME', $mode);
     }
 
-    private static function password(): string
+    private static function password(?string $mode = null): string
     {
-        return trim((string)($_ENV['IZIPAY_PASSWORD'] ?? ''));
+        return self::credential('PASSWORD', $mode);
     }
 
-    private static function hmacKey(): string
+    private static function hmacKey(?string $mode = null): string
     {
-        return trim((string)($_ENV['IZIPAY_HMAC_SHA256'] ?? ''));
+        return self::credential('HMAC_SHA256', $mode);
+    }
+
+    private static function hashCandidates(): array
+    {
+        $candidates = [];
+        foreach (array_unique([self::mode(), 'test', 'production']) as $mode) {
+            $candidates['password_' . $mode] = self::password($mode);
+            $candidates['sha256_hmac_' . $mode] = self::hmacKey($mode);
+        }
+
+        $candidates['password_legacy'] = trim((string)($_ENV['IZIPAY_PASSWORD'] ?? ''));
+        $candidates['sha256_hmac_legacy'] = trim((string)($_ENV['IZIPAY_HMAC_SHA256'] ?? ''));
+
+        return array_filter($candidates, static fn(string $value): bool => $value !== '');
+    }
+
+    private static function credential(string $name, ?string $mode = null): string
+    {
+        $mode = CompanySettingsService::normalizeIzipayMode($mode ?? self::mode());
+        $prefix = $mode === 'production' ? 'IZIPAY_PROD_' : 'IZIPAY_TEST_';
+        $modeValue = trim((string)($_ENV[$prefix . $name] ?? ''));
+
+        if ($modeValue !== '') {
+            return $modeValue;
+        }
+
+        return trim((string)($_ENV['IZIPAY_' . $name] ?? ''));
     }
 
     private static function firstName(string $name): string

@@ -1,6 +1,8 @@
 <?php $this->layout('shared::layout', ['title' => 'Pedido recibido — Caral Biotec']) ?>
 
-<?php $isPaid = ($order['payment_status'] ?? '') === 'paid'; ?>
+	<?php $isPaid = ($order['payment_status'] ?? '') === 'paid'; ?>
+	<?php $isPickup = ($order['fulfillment_method'] ?? 'delivery') === 'pickup';
+$isProvince = ($order['delivery_type'] ?? '') === 'province'; ?>
 
 <div class="container py-5">
     <div class="row justify-content-center">
@@ -47,18 +49,44 @@
                                 <small class="text-muted d-block">Correo</small>
                                 <strong><?= $this->e($order['customer_email']) ?></strong>
                             </div>
-                            <?php if ($order['shipping_address']): ?>
-                            <div class="col-12">
-                                <small class="text-muted d-block">Dirección de envío</small>
-                                <strong>
-                                    <?= $this->e($order['shipping_address']) ?>,
-                                    <?= $this->e($order['shipping_district']) ?>,
-                                    <?= $this->e($order['shipping_city']) ?>
-                                </strong>
-                            </div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
+	                            <div class="col-12">
+	                                <small class="text-muted d-block">Modalidad</small>
+	                                <strong><?= $isPickup ? 'Recojo en tienda' : ($isProvince ? 'Envio a Provincia' : 'Delivery Lima') ?></strong>
+	                            </div>
+	                            <?php if (!$isPickup && $order['shipping_address']): ?>
+	                            <div class="col-12">
+	                                <small class="text-muted d-block">Dirección de envío</small>
+	                                <strong>
+	                                    <?= $this->e($order['shipping_address']) ?>,
+	                                    <?= $isProvince ? $this->e($order['shipping_city']) : ($this->e($order['shipping_district']) . ', ' . $this->e($order['shipping_city'])) ?>
+	                                </strong>
+	                            </div>
+	                            <?php if ($isProvince): ?>
+	                            <div class="col-6">
+	                                <small class="text-muted d-block">Tipo de envio</small>
+	                                <strong>Envio a Provincia</strong>
+	                            </div>
+	                            <div class="col-6">
+	                                <small class="text-muted d-block">Courier seleccionado</small>
+	                                <strong><?= $this->e($order['courier'] ?: 'Por definir') ?></strong>
+	                            </div>
+                                    <div class="col-12">
+                                        <small class="text-muted d-block">Colocación en oficina de courier</small>
+                                        <strong>S/. <?= $this->e(number_format((float)$order['shipping_cost'], 2)) ?></strong>
+                                    </div>
+	                            <?php elseif (!empty($order['delivery_zone'])): ?>
+	                            <div class="col-6">
+	                                <small class="text-muted d-block">Zona</small>
+	                                <strong><?= $this->e($order['delivery_zone']) ?></strong>
+	                            </div>
+		                            <div class="col-6">
+		                                <small class="text-muted d-block">Delivery</small>
+		                                <strong>S/. <?= $this->e(number_format((float)$order['shipping_cost'], 2)) ?></strong>
+		                            </div>
+		                            <?php endif; ?>
+		                            <?php endif; ?>
+		                        </div>
+		                    </div>
 
                     <!-- Líneas de la orden -->
                     <h6 class="fw-bold mb-2">Productos</h6>
@@ -80,9 +108,20 @@
                     <?php endforeach; ?>
 
                     <!-- Total -->
-                    <div class="d-flex justify-content-between align-items-center mt-3">
-                        <span class="fw-bold fs-5"><?= $isPaid ? 'Total pagado' : 'Total de la orden' ?></span>
-                        <span class="fw-bold fs-4" style="color:var(--green-700)">
+	                    <div class="d-flex justify-content-between align-items-center mt-3">
+	                        <span class="text-muted">Subtotal</span>
+	                        <span>S/. <?= $this->e(number_format((float)$order['subtotal'], 2)) ?></span>
+	                    </div>
+	                    <div class="d-flex justify-content-between align-items-center mt-2">
+		                        <span class="text-muted"><?= $isPickup ? 'Recojo' : ($isProvince ? 'Colocación en courier' : 'Delivery') ?></span>
+		                        <span><?= $isPickup ? 'Sin costo' : 'S/. ' . $this->e(number_format((float)$order['shipping_cost'], 2)) ?></span>
+	                    </div>
+                            <?php if ($isProvince): ?>
+                            <p class="small text-muted mb-0 mt-2">El flete a provincia no está incluido; su monto se coordina directamente con <?= $this->e($order['courier'] ?: 'el courier') ?>.</p>
+                            <?php endif; ?>
+	                    <div class="d-flex justify-content-between align-items-center mt-3">
+	                        <span class="fw-bold fs-5"><?= $isPaid ? 'Total pagado' : 'Total de la orden' ?></span>
+	                        <span class="fw-bold fs-4" style="color:var(--green-700)">
                             S/. <?= $this->e(number_format($order['total'], 2)) ?>
                         </span>
                     </div>
@@ -100,11 +139,11 @@
                         </li>
                         <li class="mb-2 d-flex gap-2">
                             <i class="bi bi-truck mt-1" style="color:var(--green-700)"></i>
-                            <span><?= $isPaid ? 'Tu pedido sera procesado y enviado dentro de' : 'Procesaremos tu pedido apenas Izipay confirme el pago por IPN.' ?> <?= $isPaid ? '<strong>24-48 horas habiles</strong>.' : '' ?></span>
+                            <span><?= $isProvince ? ('Tu pedido sera preparado para envio a provincia por <strong>' . $this->e($order['courier'] ?: 'courier') . '</strong>.') : ($isPaid ? 'Tu pedido sera procesado y enviado dentro de <strong>24-48 horas habiles</strong>.' : 'Procesaremos tu pedido apenas Izipay confirme el pago por IPN.') ?></span>
                         </li>
                         <li class="d-flex gap-2">
                             <i class="bi bi-whatsapp mt-1" style="color:var(--green-700)"></i>
-                            <span>¿Tienes dudas? Escríbenos por <a href="https://wa.me/51947123456" target="_blank" style="color:var(--green-700);font-weight:700">WhatsApp</a>.</span>
+                            <span>¿Tienes dudas? Escríbenos por <a href="<?= $this->e($this->companyWhatsappUrl()) ?>" target="_blank" style="color:var(--green-700);font-weight:700">WhatsApp</a>.</span>
                         </li>
                     </ul>
                 </div>

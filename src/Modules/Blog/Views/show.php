@@ -20,7 +20,7 @@ $canonical = '/blog/' . $post['slug'];
     .article-content figure { margin:1.5rem 0; }
     .article-content figure img { margin:0; width:100%; }
     .article-content .blog-video-embed { position:relative; width:100%; aspect-ratio:16/9; margin:1.5rem 0; border-radius:8px; overflow:hidden; background:#0f172a; }
-    .article-content .blog-video-embed iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
+    .article-content .blog-video-embed iframe, .article-content .blog-video-embed video { position:absolute; inset:0; width:100%; height:100%; border:0; object-fit:contain; }
     .article-content blockquote { border-left:4px solid #6f5add; background:#f6f3ff; padding:1rem 1.25rem; color:#1f113c; border-radius:0 8px 8px 0; }
     .article-content table { width:100%; border-collapse:collapse; margin:1.25rem 0; font-size:.95rem; }
     .article-content th, .article-content td { border:1px solid #e2e8f0; padding:.7rem; }

@@ -22,6 +22,8 @@ $router->setNamespace('\Caral\Modules');
 
 // ── Rutas públicas ─────────────────────────────────────────────
 $router->get('/',  'CMS\Controllers\HomeController@index');
+$router->get('/nosotros',  'CMS\Controllers\HomeController@about');
+$router->get('/contacto',  'CMS\Controllers\HomeController@contact');
 
 // Autenticación
 $router->get('/login',  'Auth\Controllers\LoginController@showLoginForm');
@@ -68,6 +70,8 @@ $router->get('/admin/productos/(\d+)/editar',           'Admin\Controllers\Produ
 $router->post('/admin/productos/(\d+)/actualizar',      'Admin\Controllers\ProductAdminController@update');
 $router->post('/admin/productos/(\d+)/eliminar',        'Admin\Controllers\ProductAdminController@destroy');
 $router->post('/admin/upload-imagen',                   'Admin\Controllers\ImageUploadController@upload');
+$router->post('/admin/upload-video',                    'Admin\Controllers\ImageUploadController@uploadVideo');
+$router->get('/admin/galeria-imagenes',                  'Admin\Controllers\ImageUploadController@gallery');
 
 // Categorías (admin)
 $router->get('/admin/categorias',                       'Admin\Controllers\CategoryAdminController@index');
@@ -92,6 +96,7 @@ $router->post('/admin/blog/(\d+)/eliminar',             'Admin\Controllers\BlogA
 
 // Órdenes (admin)
 $router->get('/admin/ordenes',                          'Admin\Controllers\OrderAdminController@index');
+$router->get('/admin/ordenes/(\d+)/boleta',             'Admin\Controllers\OrderAdminController@receipt');
 $router->get('/admin/ordenes/(\d+)',                    'Admin\Controllers\OrderAdminController@show');
 $router->post('/admin/ordenes/(\d+)/estado',            'Admin\Controllers\OrderAdminController@updateStatus');
 

@@ -13,3 +13,21 @@ Thumbs.db
 tmp/
 coverage/
 node_modules/
+
+# Local deployment packages, backups and working assets
+-C
+*.zip
+*.rar
+database/backups/
+database/scripts/
+exports/
+fotos/
+ftp_*/
+datarutas.txt
+tarifario_delivery_caral.*
+public/tarifario_delivery_caral.csv
+
+# One-off maintenance endpoints must never remain public
+public/backup_database.php
+public/restore_*.php
+public/update_*_schema.php

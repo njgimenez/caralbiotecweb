@@ -185,7 +185,7 @@ class BlogAdminController
             'slug' => trim($_POST['slug'] ?? ''),
             'excerpt' => $this->limitText($_POST['excerpt'] ?? '', 320),
             'content_html' => $this->sanitizeHtml($_POST['content_html'] ?? ''),
-            'featured_image_url' => trim($_POST['featured_image_url'] ?? ''),
+            'featured_image_url' => $this->normalizeMediaUrl($_POST['featured_image_url'] ?? ''),
             'meta_title' => $this->limitText($_POST['meta_title'] ?? '', 220),
             'meta_description' => $this->limitText($_POST['meta_description'] ?? '', 320),
             'tags' => $this->limitText($_POST['tags'] ?? '', 500),
@@ -194,16 +194,38 @@ class BlogAdminController
         ];
     }
 
+    private function normalizeMediaUrl(string $value): string
+    {
+        $url = trim($value);
+        if ($url === '' || preg_match('#^(?:https?://|/)#i', $url)) {
+            return $url;
+        }
+
+        if (str_starts_with($url, '//')) {
+            return 'https:' . $url;
+        }
+
+        if (preg_match('#^[a-z][a-z0-9+.-]*:#i', $url)) {
+            return '';
+        }
+
+        if (preg_match('#^(?:uploads|images)/#i', $url)) {
+            return '/' . $url;
+        }
+
+        if (preg_match('#^(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:[/:?#].*)?$#i', $url)) {
+            return 'https://' . $url;
+        }
+
+        return $url;
+    }
+
     private function sanitizeHtml(string $html): string
     {
         $html = preg_replace('#<script\b[^>]*>(.*?)</script>#is', '', $html);
         $html = preg_replace('/\son[a-z]+\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', $html);
         $html = preg_replace('/javascript\s*:/i', '', $html);
-        $html = preg_replace_callback(
-            '#<div[^>]*class=["\'][^"\']*blog-video-embed[^"\']*["\'][^>]*>\s*<iframe[^>]+src=["\']https://www\.youtube-nocookie\.com/embed/([a-zA-Z0-9_-]{11})[^"\']*["\'][^>]*>\s*</iframe>\s*</div>#i',
-            fn(array $matches): string => '<p>https://youtu.be/' . $matches[1] . '</p>',
-            $html
-        );
+        $html = $this->normalizeStoredMediaEmbeds($html);
         $html = preg_replace('#<div\b[^>]*>#i', '<p>', $html);
         $html = preg_replace('#</div>#i', '</p>', $html);
         $html = strip_tags($html, '<p><br><h2><h3><h4><strong><b><em><i><u><ul><ol><li><blockquote><a><img><figure><figcaption><hr><table><thead><tbody><tr><th><td>');
@@ -211,15 +233,41 @@ class BlogAdminController
         return $this->embedMediaUrls($html);
     }
 
+    private function normalizeStoredMediaEmbeds(string $html): string
+    {
+        $html = preg_replace_callback(
+            '#<div[^>]*class=["\'][^"\']*blog-video-embed[^"\']*["\'][^>]*>\s*<iframe[^>]+src=["\']https://www\.youtube-nocookie\.com/embed/([a-zA-Z0-9_-]{11})[^"\']*["\'][^>]*>\s*</iframe>\s*</div>#i',
+            fn(array $matches): string => '<p>https://youtu.be/' . $matches[1] . '</p>',
+            $html
+        );
+        $html = preg_replace_callback(
+            '#<div[^>]*class=["\'][^"\']*blog-video-embed[^"\']*["\'][^>]*>\s*<iframe[^>]+src=["\']https://player\.vimeo\.com/video/([0-9]+)[^"\']*["\'][^>]*>\s*</iframe>\s*</div>#i',
+            fn(array $matches): string => '<p>https://vimeo.com/' . $matches[1] . '</p>',
+            $html
+        );
+        $html = preg_replace_callback(
+            '#<div[^>]*class=["\'][^"\']*blog-video-embed[^"\']*["\'][^>]*>\s*<video[^>]+src=["\']([^"\']+)["\'][^>]*>.*?</video>\s*</div>#is',
+            fn(array $matches): string => '<p>' . htmlspecialchars(html_entity_decode($matches[1], ENT_QUOTES, 'UTF-8'), ENT_QUOTES, 'UTF-8') . '</p>',
+            $html
+        );
+        $html = preg_replace_callback(
+            '#<div[^>]*class=["\'][^"\']*blog-video-embed[^"\']*["\'][^>]*>\s*<video[^>]*>\s*<source[^>]+src=["\']([^"\']+)["\'][^>]*>.*?</video>\s*</div>#is',
+            fn(array $matches): string => '<p>' . htmlspecialchars(html_entity_decode($matches[1], ENT_QUOTES, 'UTF-8'), ENT_QUOTES, 'UTF-8') . '</p>',
+            $html
+        );
+
+        return $html;
+    }
+
     private function embedMediaUrls(string $html): string
     {
         $plain = trim(strip_tags($html));
-        if ($plain !== '' && preg_match('#^https?://[^\s<]+$#i', $plain)) {
+        if ($plain !== '' && preg_match('#^(?:https?://|/)[^\s<]+$#i', $plain)) {
             $html = '<p>' . htmlspecialchars($plain, ENT_QUOTES, 'UTF-8') . '</p>';
         }
 
         $html = preg_replace_callback(
-            '#<p>\s*(?:<a[^>]+href=["\']([^"\']+)["\'][^>]*>\s*)?(https?://[^\s<]+)(?:\s*</a>)?\s*</p>#i',
+            '#<p>\s*(?:<a[^>]+href=["\']([^"\']+)["\'][^>]*>\s*)?((?:https?://|/)[^\s<]+)(?:\s*</a>)?\s*</p>#i',
             function (array $matches): string {
                 $url = html_entity_decode($matches[1] ?: $matches[2], ENT_QUOTES, 'UTF-8');
                 $url = trim($url);
@@ -227,6 +275,16 @@ class BlogAdminController
                 if ($youtubeId = $this->extractYoutubeId($url)) {
                     $src = 'https://www.youtube-nocookie.com/embed/' . htmlspecialchars($youtubeId, ENT_QUOTES, 'UTF-8');
                     return '<div class="blog-video-embed"><iframe src="' . $src . '" title="Video de YouTube" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>';
+                }
+
+                if ($vimeoId = $this->extractVimeoId($url)) {
+                    $src = 'https://player.vimeo.com/video/' . htmlspecialchars($vimeoId, ENT_QUOTES, 'UTF-8');
+                    return '<div class="blog-video-embed"><iframe src="' . $src . '" title="Video de Vimeo" loading="lazy" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe></div>';
+                }
+
+                if ($this->isVideoUrl($url)) {
+                    $safeUrl = htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
+                    return '<div class="blog-video-embed blog-video-file"><video controls preload="metadata" playsinline src="' . $safeUrl . '"></video></div>';
                 }
 
                 if ($this->isImageUrl($url)) {
@@ -270,6 +328,29 @@ class BlogAdminController
         }
 
         return null;
+    }
+
+    private function extractVimeoId(string $url): ?string
+    {
+        $parts = parse_url($url);
+        $host = strtolower($parts['host'] ?? '');
+        $isVimeoHost = $host === 'vimeo.com' || str_ends_with($host, '.vimeo.com');
+        if (!$isVimeoHost) {
+            return null;
+        }
+
+        $path = trim($parts['path'] ?? '', '/');
+        if (preg_match('#(?:^|/)([0-9]+)(?:$|/)#', $path, $matches)) {
+            return $matches[1];
+        }
+
+        return null;
+    }
+
+    private function isVideoUrl(string $url): bool
+    {
+        $path = parse_url($url, PHP_URL_PATH) ?: '';
+        return (bool)preg_match('/\.(mp4|webm|ogv|ogg)$/i', $path);
     }
 
     private function isImageUrl(string $url): bool

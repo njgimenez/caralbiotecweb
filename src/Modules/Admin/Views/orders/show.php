@@ -11,6 +11,8 @@ $statusColors = [
     'refunded'   => ['bg' => '#f1f5f9', 'color' => '#475569', 'label' => 'Reembolsado'],
 ];
 $sc = $statusColors[$order['status']] ?? ['bg'=>'#f1f5f9','color'=>'#64748b','label'=>$order['status']];
+$isPickup = ($order['fulfillment_method'] ?? 'delivery') === 'pickup';
+$isProvince = ($order['delivery_type'] ?? '') === 'province';
 ?>
 
 <div class="mb-4 d-flex align-items-center gap-3">
@@ -21,6 +23,9 @@ $sc = $statusColors[$order['status']] ?? ['bg'=>'#f1f5f9','color'=>'#64748b','la
     <span class="badge rounded-pill px-3 py-2" style="background:<?= $sc['bg'] ?>;color:<?= $sc['color'] ?>">
         <?= $sc['label'] ?>
     </span>
+    <a href="/admin/ordenes/<?= $this->e($order['id']) ?>/boleta" target="_blank" class="btn-admin-save py-2 px-3 rounded-3 ms-auto">
+        <i class="bi bi-receipt me-1"></i>Ver boleta
+    </a>
 </div>
 
 <div class="row g-4">
@@ -78,18 +83,44 @@ $sc = $statusColors[$order['status']] ?? ['bg'=>'#f1f5f9','color'=>'#64748b','la
                     <div class="fw-semibold"><?= $this->e($order['customer_phone']) ?></div>
                 </div>
                 <?php endif; ?>
-                <?php if ($order['shipping_address']): ?>
-                <div class="col-12">
-                    <small class="text-muted">Dirección de envío</small>
-                    <div class="fw-semibold">
-                        <?= $this->e($order['shipping_address']) ?>,
-                        <?= $this->e($order['shipping_district']) ?>,
-                        <?= $this->e($order['shipping_city']) ?>
-                    </div>
-                </div>
-                <?php endif; ?>
-            </div>
-        </div>
+	                <div class="col-md-6">
+	                    <small class="text-muted">Modalidad</small>
+	                    <div class="fw-semibold"><?= $isPickup ? 'Recojo en tienda' : ($isProvince ? 'Envio a Provincia' : 'Delivery Lima') ?></div>
+	                </div>
+	                <?php if (!$isPickup && $order['shipping_address']): ?>
+	                <div class="col-12">
+	                    <small class="text-muted">Dirección de envío</small>
+	                    <div class="fw-semibold">
+	                        <?= $this->e($order['shipping_address']) ?>,
+	                        <?= $isProvince ? $this->e($order['shipping_city']) : ($this->e($order['shipping_district']) . ', ' . $this->e($order['shipping_city'])) ?>
+	                    </div>
+	                </div>
+	                <?php if ($isProvince): ?>
+	                <div class="col-md-6">
+	                    <small class="text-muted">Tipo de envio</small>
+	                    <div class="fw-semibold">Envio a Provincia</div>
+	                </div>
+	                <div class="col-md-6">
+	                    <small class="text-muted">Courier provincia</small>
+	                    <div class="fw-semibold"><?= $this->e($order['courier'] ?: 'Por definir') ?></div>
+	                </div>
+	                <?php elseif (!empty($order['delivery_zone'])): ?>
+	                <div class="col-md-4">
+	                    <small class="text-muted">Zona delivery</small>
+	                    <div class="fw-semibold"><?= $this->e($order['delivery_zone']) ?></div>
+	                </div>
+	                <div class="col-md-4">
+	                    <small class="text-muted">Ruta</small>
+	                    <div class="fw-semibold"><?= $this->e($order['delivery_route_code']) ?> · <?= $this->e($order['delivery_route_name']) ?></div>
+	                </div>
+	                <div class="col-md-4">
+	                    <small class="text-muted">Tiempo estimado</small>
+	                    <div class="fw-semibold"><?= $this->e($order['delivery_time_min']) ?>-<?= $this->e($order['delivery_time_max']) ?> min</div>
+	                </div>
+	                <?php endif; ?>
+	                <?php endif; ?>
+	            </div>
+	        </div>
 
         <!-- Datos de pago Izipay -->
         <?php if ($order['payment_operation_id']): ?>
@@ -139,15 +170,17 @@ $sc = $statusColors[$order['status']] ?? ['bg'=>'#f1f5f9','color'=>'#64748b','la
                 <span>S/. <?= $this->e(number_format($order['subtotal'], 2)) ?></span>
             </div>
             <div class="d-flex justify-content-between mb-2">
-                <span class="text-muted">Envío</span>
-                <span><?= $order['shipping_cost'] > 0 ? 'S/. ' . number_format($order['shipping_cost'], 2) : '<span class="text-success">Gratis</span>' ?></span>
+	                <span class="text-muted"><?= $isPickup ? 'Recojo' : ($isProvince ? 'Colocación en courier' : 'Envío') ?></span>
+	                <span><?= $isPickup ? '<span class="text-success">Sin costo</span>' : ($order['shipping_cost'] > 0 ? 'S/. ' . number_format($order['shipping_cost'], 2) : '<span class="text-success">Gratis</span>') ?></span>
             </div>
+            <?php if ($isProvince): ?><small class="text-muted d-block mb-2">El flete se coordina directamente con el courier.</small><?php endif; ?>
             <hr>
             <div class="d-flex justify-content-between fw-bold">
                 <span>Total</span>
                 <span class="text-success">S/. <?= $this->e(number_format($order['total'], 2)) ?></span>
             </div>
             <hr>
+            <small class="text-muted d-block">Ambiente Izipay: <?= ($order['payment_environment'] ?? 'test') === 'production' ? 'Produccion' : 'Desarrollo / Test' ?></small>
             <small class="text-muted d-block">Creado: <?= date('d/m/Y H:i', strtotime($order['created_at'])) ?></small>
             <?php if ($order['updated_at']): ?>
             <small class="text-muted d-block">Actualizado: <?= date('d/m/Y H:i', strtotime($order['updated_at'])) ?></small>

@@ -309,6 +309,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 shipping_address TEXT NULL,
                 shipping_district VARCHAR(100) NULL,
                 shipping_city VARCHAR(100) NULL,
+                fulfillment_method VARCHAR(20) NOT NULL DEFAULT 'delivery',
+                delivery_type VARCHAR(20) NOT NULL DEFAULT 'lima',
+                courier VARCHAR(30) NULL,
+                delivery_zone VARCHAR(30) NULL,
+                delivery_route_code VARCHAR(20) NULL,
+                delivery_route_name VARCHAR(120) NULL,
+                delivery_time_min INT NULL,
+                delivery_time_max INT NULL,
                 subtotal DECIMAL(10,2) NOT NULL DEFAULT 0.00,
                 shipping_cost DECIMAL(10,2) NOT NULL DEFAULT 0.00,
                 total DECIMAL(10,2) NOT NULL DEFAULT 0.00,
@@ -317,6 +325,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 document_number VARCHAR(20) NULL,
                 document_name VARCHAR(180) NULL,
                 payment_method VARCHAR(50) NULL,
+                payment_provider VARCHAR(50) NULL,
+                payment_environment VARCHAR(20) NOT NULL DEFAULT 'test',
                 payment_status VARCHAR(30) NOT NULL DEFAULT 'pending',
                 payment_operation_id VARCHAR(100) NULL,
                 payment_response_json LONGTEXT NULL,
@@ -381,14 +391,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $hash = password_hash('admin123', PASSWORD_BCRYPT);
 
         insert_ignore($pdo, 'roles', ['id' => 1, 'name' => 'Super Administrador', 'description' => 'Acceso total']);
-        insert_ignore($pdo, 'roles', ['id' => 2, 'name' => 'Marketing', 'description' => 'Gestión de contenidos y promociones']);
-        insert_ignore($pdo, 'roles', ['id' => 3, 'name' => 'Operaciones', 'description' => 'Gestión de pedidos y despachos']);
+        insert_ignore($pdo, 'roles', ['id' => 2, 'name' => 'Marketing', 'description' => 'GestiÃ³n de contenidos y promociones']);
+        insert_ignore($pdo, 'roles', ['id' => 3, 'name' => 'Operaciones', 'description' => 'GestiÃ³n de pedidos y despachos']);
         insert_ignore($pdo, 'roles', ['id' => 4, 'name' => 'Cliente', 'description' => 'Cliente registrado']);
-        insert_ignore($pdo, 'roles', ['id' => 5, 'name' => 'Editor', 'description' => 'Gestión editorial del blog']);
+        insert_ignore($pdo, 'roles', ['id' => 5, 'name' => 'Editor', 'description' => 'GestiÃ³n editorial del blog']);
 
         insert_ignore($pdo, 'permissions', ['id' => 1, 'name' => 'manage_users', 'description' => 'Administrar usuarios del sistema']);
-        insert_ignore($pdo, 'permissions', ['id' => 2, 'name' => 'manage_cms', 'description' => 'Administrar páginas y bloques del CMS']);
-        insert_ignore($pdo, 'permissions', ['id' => 3, 'name' => 'manage_catalog', 'description' => 'Administrar productos y categorías']);
+        insert_ignore($pdo, 'permissions', ['id' => 2, 'name' => 'manage_cms', 'description' => 'Administrar pÃ¡ginas y bloques del CMS']);
+        insert_ignore($pdo, 'permissions', ['id' => 3, 'name' => 'manage_catalog', 'description' => 'Administrar productos y categorÃ­as']);
         insert_ignore($pdo, 'permissions', ['id' => 4, 'name' => 'view_dashboard', 'description' => 'Ver indicadores del panel de control']);
         insert_ignore($pdo, 'permissions', ['id' => 5, 'name' => 'manage_blog', 'description' => 'Administrar entradas del blog']);
 
@@ -411,23 +421,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         insert_ignore($pdo, 'user_roles', ['user_id' => 3, 'role_id' => 4]);
         insert_ignore($pdo, 'user_roles', ['user_id' => 4, 'role_id' => 5]);
 
-        insert_ignore($pdo, 'categories', ['id' => 1, 'name' => 'Nutracéuticos', 'slug' => 'nutraceuticos', 'description' => 'Suplementos para tu salud y nutrición', 'image_url' => '/uploads/cat_nutraceuticos.png']);
+        insert_ignore($pdo, 'categories', ['id' => 1, 'name' => 'NutracÃ©uticos', 'slug' => 'nutraceuticos', 'description' => 'Suplementos para tu salud y nutriciÃ³n', 'image_url' => '/uploads/cat_nutraceuticos.png']);
         insert_ignore($pdo, 'categories', ['id' => 2, 'name' => 'Bienestar', 'slug' => 'bienestar', 'description' => 'Descanso, confort y cuidado personal', 'image_url' => '/uploads/cat_bienestar.png']);
-        insert_ignore($pdo, 'categories', ['id' => 3, 'name' => 'Rehabilitación', 'slug' => 'rehabilitacion', 'description' => 'Equipos y accesorios para tu recuperación', 'image_url' => '/uploads/cat_rehabilitacion.png']);
-        insert_ignore($pdo, 'categories', ['id' => 4, 'name' => 'Apoyo al Paciente', 'slug' => 'apoyo-al-paciente', 'description' => 'Productos de apoyo para tu día a día', 'image_url' => '/uploads/cat_apoyo.png']);
+        insert_ignore($pdo, 'categories', ['id' => 3, 'name' => 'RehabilitaciÃ³n', 'slug' => 'rehabilitacion', 'description' => 'Equipos y accesorios para tu recuperaciÃ³n', 'image_url' => '/uploads/cat_rehabilitacion.png']);
+        insert_ignore($pdo, 'categories', ['id' => 4, 'name' => 'Apoyo al Paciente', 'slug' => 'apoyo-al-paciente', 'description' => 'Productos de apoyo para tu dÃ­a a dÃ­a', 'image_url' => '/uploads/cat_apoyo.png']);
 
-        insert_ignore($pdo, 'health_conditions', ['id' => 1, 'name' => 'Cáncer', 'slug' => 'cancer', 'description' => 'Productos para el bienestar y cuidado integral', 'icon' => 'ribbon']);
-        insert_ignore($pdo, 'health_conditions', ['id' => 2, 'name' => 'Diabetes', 'slug' => 'diabetes', 'description' => 'Control, prevención y bienestar diario', 'icon' => 'droplet']);
+        insert_ignore($pdo, 'health_conditions', ['id' => 1, 'name' => 'CÃ¡ncer', 'slug' => 'cancer', 'description' => 'Productos para el bienestar y cuidado integral', 'icon' => 'ribbon']);
+        insert_ignore($pdo, 'health_conditions', ['id' => 2, 'name' => 'Diabetes', 'slug' => 'diabetes', 'description' => 'Control, prevenciÃ³n y bienestar diario', 'icon' => 'droplet']);
         insert_ignore($pdo, 'health_conditions', ['id' => 3, 'name' => 'Osteoporosis', 'slug' => 'osteoporosis', 'description' => 'Fortalece tus huesos y mejora tu calidad de vida', 'icon' => 'bone']);
-        insert_ignore($pdo, 'health_conditions', ['id' => 4, 'name' => 'Cardiológicos', 'slug' => 'cardiologicos', 'description' => 'Cuida tu corazón y mejora tu salud', 'icon' => 'heart']);
+        insert_ignore($pdo, 'health_conditions', ['id' => 4, 'name' => 'CardiolÃ³gicos', 'slug' => 'cardiologicos', 'description' => 'Cuida tu corazÃ³n y mejora tu salud', 'icon' => 'heart']);
         insert_ignore($pdo, 'health_conditions', ['id' => 5, 'name' => 'Adulto Mayor', 'slug' => 'adulto-mayor', 'description' => 'Bienestar, seguridad y confort diario', 'icon' => 'person']);
-        insert_ignore($pdo, 'health_conditions', ['id' => 6, 'name' => 'Rehabilitación', 'slug' => 'rehabilitacion-condicion', 'description' => 'Recupera tu movilidad y bienestar', 'icon' => 'activity']);
+        insert_ignore($pdo, 'health_conditions', ['id' => 6, 'name' => 'RehabilitaciÃ³n', 'slug' => 'rehabilitacion-condicion', 'description' => 'Recupera tu movilidad y bienestar', 'icon' => 'activity']);
 
-        insert_ignore($pdo, 'products', ['id' => 1, 'category_id' => 1, 'name' => 'Colágeno Hidrolizado Premium', 'slug' => 'colageno-hidrolizado-premium', 'sku' => 'NUT-COL-001', 'short_description' => 'Colágeno de alta absorción para fortalecer articulaciones y piel.', 'description' => 'Nuestro Colágeno Hidrolizado Premium está enriquecido con Vitamina C y Magnesio, diseñado especialmente para mejorar la elasticidad de la piel, fortalecer el cabello y brindar soporte estructural a tus articulaciones y huesos.', 'price' => 89.90, 'stock' => 50, 'image_url' => '/uploads/colageno.jpg', 'is_active' => 1]);
-        insert_ignore($pdo, 'products', ['id' => 2, 'category_id' => 3, 'name' => 'Pistola de Masaje Vacufast', 'slug' => 'pistola-masaje-vacufast', 'sku' => 'REH-VAC-001', 'short_description' => 'Dispositivo de percusión profesional para aliviar dolores musculares.', 'description' => 'La pistola de masaje Vacufast cuenta con 6 cabezales intercambiables y 20 niveles de velocidad. Ideal para la rehabilitación muscular.', 'price' => 250.00, 'stock' => 15, 'image_url' => '/uploads/vacufast.jpg', 'is_active' => 1]);
-        insert_ignore($pdo, 'products', ['id' => 3, 'category_id' => 2, 'name' => 'Almohada Ergonómica Confort', 'slug' => 'almohada-ergonomica-confort', 'sku' => 'BIE-ALM-001', 'short_description' => 'Almohada de espuma viscoelástica para soporte cervical.', 'description' => 'Diseñada anatómicamente para mantener alineada la columna cervical durante el descanso. Memory foam de alta densidad.', 'price' => 120.00, 'stock' => 30, 'image_url' => '/uploads/almohada.jpg', 'is_active' => 1]);
-        insert_ignore($pdo, 'products', ['id' => 4, 'category_id' => 4, 'name' => 'Bastón Regulable de Aluminio', 'slug' => 'baston-regulable-aluminio', 'sku' => 'APO-BAS-001', 'short_description' => 'Bastón ligero de aluminio con mango ergonómico.', 'description' => 'Bastón de apoyo regulable en altura con base antideslizante. Aluminio anodizado de alta resistencia.', 'price' => 65.00, 'stock' => 40, 'image_url' => '/uploads/baston.jpg', 'is_active' => 1]);
-        insert_ignore($pdo, 'products', ['id' => 5, 'category_id' => 1, 'name' => 'Multivitamínico Oncológico Care', 'slug' => 'multivitaminico-oncologico-care', 'sku' => 'NUT-ONC-001', 'short_description' => 'Suplemento nutricional de apoyo integral para el sistema inmunológico.', 'description' => 'Fórmula especial rica en antioxidantes, vitaminas y minerales clave para dar soporte nutricional y mantener las defensas activas.', 'price' => 110.00, 'stock' => 25, 'image_url' => '/uploads/multivitaminico.jpg', 'is_active' => 1]);
+        insert_ignore($pdo, 'products', ['id' => 1, 'category_id' => 1, 'name' => 'ColÃ¡geno Hidrolizado Premium', 'slug' => 'colageno-hidrolizado-premium', 'sku' => 'NUT-COL-001', 'short_description' => 'ColÃ¡geno de alta absorciÃ³n para fortalecer articulaciones y piel.', 'description' => 'Nuestro ColÃ¡geno Hidrolizado Premium estÃ¡ enriquecido con Vitamina C y Magnesio, diseÃ±ado especialmente para mejorar la elasticidad de la piel, fortalecer el cabello y brindar soporte estructural a tus articulaciones y huesos.', 'price' => 89.90, 'stock' => 50, 'image_url' => '/uploads/colageno.jpg', 'is_active' => 1]);
+        insert_ignore($pdo, 'products', ['id' => 2, 'category_id' => 3, 'name' => 'Pistola de Masaje Vacufast', 'slug' => 'pistola-masaje-vacufast', 'sku' => 'REH-VAC-001', 'short_description' => 'Dispositivo de percusiÃ³n profesional para aliviar dolores musculares.', 'description' => 'La pistola de masaje Vacufast cuenta con 6 cabezales intercambiables y 20 niveles de velocidad. Ideal para la rehabilitaciÃ³n muscular.', 'price' => 250.00, 'stock' => 15, 'image_url' => '/uploads/vacufast.jpg', 'is_active' => 1]);
+        insert_ignore($pdo, 'products', ['id' => 3, 'category_id' => 2, 'name' => 'Almohada ErgonÃ³mica Confort', 'slug' => 'almohada-ergonomica-confort', 'sku' => 'BIE-ALM-001', 'short_description' => 'Almohada de espuma viscoelÃ¡stica para soporte cervical.', 'description' => 'DiseÃ±ada anatÃ³micamente para mantener alineada la columna cervical durante el descanso. Memory foam de alta densidad.', 'price' => 120.00, 'stock' => 30, 'image_url' => '/uploads/almohada.jpg', 'is_active' => 1]);
+        insert_ignore($pdo, 'products', ['id' => 4, 'category_id' => 4, 'name' => 'BastÃ³n Regulable de Aluminio', 'slug' => 'baston-regulable-aluminio', 'sku' => 'APO-BAS-001', 'short_description' => 'BastÃ³n ligero de aluminio con mango ergonÃ³mico.', 'description' => 'BastÃ³n de apoyo regulable en altura con base antideslizante. Aluminio anodizado de alta resistencia.', 'price' => 65.00, 'stock' => 40, 'image_url' => '/uploads/baston.jpg', 'is_active' => 1]);
+        insert_ignore($pdo, 'products', ['id' => 5, 'category_id' => 1, 'name' => 'MultivitamÃ­nico OncolÃ³gico Care', 'slug' => 'multivitaminico-oncologico-care', 'sku' => 'NUT-ONC-001', 'short_description' => 'Suplemento nutricional de apoyo integral para el sistema inmunolÃ³gico.', 'description' => 'FÃ³rmula especial rica en antioxidantes, vitaminas y minerales clave para dar soporte nutricional y mantener las defensas activas.', 'price' => 110.00, 'stock' => 25, 'image_url' => '/uploads/multivitaminico.jpg', 'is_active' => 1]);
 
         insert_ignore($pdo, 'product_conditions', ['product_id' => 1, 'health_condition_id' => 3]);
         insert_ignore($pdo, 'product_conditions', ['product_id' => 2, 'health_condition_id' => 6]);
@@ -436,42 +446,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         insert_ignore($pdo, 'product_conditions', ['product_id' => 5, 'health_condition_id' => 1]);
 
         $heroData = [
-            'tag_text' => 'Productos certificados · Lima, Perú',
+            'tag_text' => 'Productos certificados Â· Lima, PerÃº',
             'title_part1' => 'Soluciones integrales para tu',
             'title_accent' => 'bienestar',
-            'title_part2' => 'y recuperación',
-            'subtitle' => 'Nutracéuticos, equipos de rehabilitación y productos de bienestar seleccionados por especialistas para mejorar tu calidad de vida.',
+            'title_part2' => 'y recuperaciÃ³n',
+            'subtitle' => 'NutracÃ©uticos, equipos de rehabilitaciÃ³n y productos de bienestar seleccionados por especialistas para mejorar tu calidad de vida.',
             'btn_primary_text' => 'Comprar ahora',
             'btn_primary_url' => '/productos',
-            'btn_secondary_text' => 'Ver categorías',
+            'btn_secondary_text' => 'Ver categorÃ­as',
             'btn_secondary_url' => '#categorias',
         ];
 
         $benefitsData = [
-            ['icon' => 'truck', 'title' => 'Envíos a todo el Perú', 'desc' => 'Rápidos y seguros'],
-            ['icon' => 'shield-check', 'title' => 'Productos de calidad', 'desc' => 'Garantía y respaldo'],
+            ['icon' => 'truck', 'title' => 'EnvÃ­os a todo el PerÃº', 'desc' => 'RÃ¡pidos y seguros'],
+            ['icon' => 'shield-check', 'title' => 'Productos de calidad', 'desc' => 'GarantÃ­a y respaldo'],
             ['icon' => 'lock', 'title' => 'Compra 100% segura', 'desc' => 'Tus datos protegidos'],
-            ['icon' => 'headset', 'title' => 'Atención personalizada', 'desc' => 'Te asesoramos siempre'],
+            ['icon' => 'headset', 'title' => 'AtenciÃ³n personalizada', 'desc' => 'Te asesoramos siempre'],
         ];
 
         $ctaData = [
-            'title' => '¿Necesitas asesoría personalizada?',
-            'subtitle' => 'Nuestro equipo de especialistas está listo para ayudarte a elegir el producto ideal.',
+            'title' => 'Â¿Necesitas asesorÃ­a personalizada?',
+            'subtitle' => 'Nuestro equipo de especialistas estÃ¡ listo para ayudarte a elegir el producto ideal.',
             'btn_text' => 'Chatear por WhatsApp',
-            'btn_url' => 'https://wa.me/51947123456',
+            'btn_url' => 'https://wa.me/51939622005',
             'btn_icon' => 'whatsapp',
         ];
 
-        upsert($pdo, 'cms_blocks', ['block_key' => 'home_hero', 'title' => 'Sección Hero Principal', 'content_json' => json_encode($heroData, JSON_UNESCAPED_UNICODE), 'is_active' => 1], ['title', 'content_json', 'is_active'], 'uq_cms_blocks_key');
+        upsert($pdo, 'cms_blocks', ['block_key' => 'home_hero', 'title' => 'SecciÃ³n Hero Principal', 'content_json' => json_encode($heroData, JSON_UNESCAPED_UNICODE), 'is_active' => 1], ['title', 'content_json', 'is_active'], 'uq_cms_blocks_key');
         upsert($pdo, 'cms_blocks', ['block_key' => 'home_benefits', 'title' => 'Barra de Beneficios (Trust Badges)', 'content_json' => json_encode($benefitsData, JSON_UNESCAPED_UNICODE), 'is_active' => 1], ['title', 'content_json', 'is_active'], 'uq_cms_blocks_key');
-        upsert($pdo, 'cms_blocks', ['block_key' => 'home_cta', 'title' => 'Llamado a la Acción Personalizado (CTA)', 'content_json' => json_encode($ctaData, JSON_UNESCAPED_UNICODE), 'is_active' => 1], ['title', 'content_json', 'is_active'], 'uq_cms_blocks_key');
+        upsert($pdo, 'cms_blocks', ['block_key' => 'home_cta', 'title' => 'Llamado a la AcciÃ³n Personalizado (CTA)', 'content_json' => json_encode($ctaData, JSON_UNESCAPED_UNICODE), 'is_active' => 1], ['title', 'content_json', 'is_active'], 'uq_cms_blocks_key');
 
         $companySettings = [
             'business_name' => 'Caral Biotec',
             'trade_name' => 'Caral Biotec',
             'ruc' => '',
-            'address' => 'Lima, Perú',
-            'phone' => '',
+            'address' => 'Lima, PerÃº',
+            'phone' => '+51 939 622 005',
             'email' => 'contacto@caralbiotec.com',
             'igv_percent' => 18.00,
         ];
@@ -555,9 +565,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <input id="DB_DATABASE" name="DB_DATABASE" value="<?= h($defaults['DB_DATABASE']) ?>">
         <label for="DB_USERNAME">Usuario</label>
         <input id="DB_USERNAME" name="DB_USERNAME" value="<?= h($defaults['DB_USERNAME']) ?>">
-        <label for="DB_PASSWORD">Contraseña</label>
+        <label for="DB_PASSWORD">ContraseÃ±a</label>
         <input id="DB_PASSWORD" name="DB_PASSWORD" type="password" value="<?= h($defaults['DB_PASSWORD']) ?>">
-        <p class="small">Las cuentas iniciales quedan con contraseña <code>admin123</code>.</p>
+        <p class="small">Las cuentas iniciales quedan con contraseÃ±a <code>admin123</code>.</p>
         <button type="submit">Crear base y datos iniciales</button>
     </form>
     <?php else: ?>

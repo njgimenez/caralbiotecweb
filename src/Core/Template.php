@@ -27,6 +27,21 @@ class Template
         $engine->registerFunction('getCartCount', function () {
             return \Caral\Modules\Cart\Services\CartService::getCartCount();
         });
+        $engine->registerFunction('companySettings', function () {
+            return \Caral\Modules\Admin\Services\CompanySettingsService::get();
+        });
+        $engine->registerFunction('companyPhone', function () {
+            return \Caral\Modules\Admin\Services\CompanySettingsService::phoneDisplay();
+        });
+        $engine->registerFunction('companyWhatsappUrl', function () {
+            return \Caral\Modules\Admin\Services\CompanySettingsService::whatsappUrl();
+        });
+        $engine->registerFunction('companyEmail', function () {
+            return \Caral\Modules\Admin\Services\CompanySettingsService::get()['email'] ?? '';
+        });
+        $engine->registerFunction('companyAddress', function () {
+            return \Caral\Modules\Admin\Services\CompanySettingsService::get()['address'] ?? '';
+        });
 
         return $engine;
     }

@@ -42,7 +42,7 @@
                     </li>
                     <li class="d-flex gap-2">
                         <i class="bi bi-whatsapp text-success mt-1"></i>
-                        <span>¿Necesitas ayuda? Escríbenos por <a href="https://wa.me/51947123456" target="_blank" class="text-success fw-bold">WhatsApp</a> y te asistimos.</span>
+                        <span>¿Necesitas ayuda? Escríbenos por <a href="<?= $this->e($this->companyWhatsappUrl()) ?>" target="_blank" class="text-success fw-bold">WhatsApp</a> y te asistimos.</span>
                     </li>
                 </ul>
             </div>

@@ -236,6 +236,28 @@
         }
         .btn-admin-danger:hover { background: #fecaca; }
 
+
+        /* Media picker */
+        .media-picker-shell { display:grid; gap:.5rem; }
+        .media-picker-control { display:flex; gap:.5rem; align-items:stretch; }
+        .media-picker-control .form-control { flex:1 1 auto; min-width:0; }
+        .media-picker-btn {
+            border:1px solid #dbe3ec; background:#fff; color:#374151;
+            border-radius:8px; padding:.55rem .75rem; font-size:.82rem; font-weight:600;
+            display:inline-flex; align-items:center; gap:.35rem; white-space:nowrap;
+        }
+        .media-picker-btn:hover { background:#f6f3ff; border-color:#b0a8ff; color:#4b2bb0; }
+        .media-picker-preview {
+            display:none; width:100%; max-width:260px; aspect-ratio:16/9;
+            border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; background:#f8fafc;
+        }
+        .media-picker-preview img { width:100%; height:100%; object-fit:cover; display:block; }
+        .media-gallery-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:.75rem; max-height:360px; overflow:auto; padding-right:.25rem; }
+        .media-gallery-item { border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; background:#fff; text-align:left; padding:0; cursor:pointer; }
+        .media-gallery-item:hover { border-color:#6f5add; box-shadow:0 0 0 3px rgba(111,90,221,.12); }
+        .media-gallery-item img { width:100%; aspect-ratio:4/3; object-fit:cover; display:block; background:#f1f5f9; }
+        .media-gallery-item span { display:block; padding:.45rem .55rem; font-size:.72rem; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
         /* Alert flash */
         .flash-alert {
             border-radius: 10px; font-size: .875rem; font-weight: 500;
@@ -413,6 +435,206 @@ $isEditorOnly = ($this->getUserRole() === 'Editor');
     <?= $this->section('content') ?>
 </main>
 
+
+<div class="modal fade" id="mediaPickerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-images me-2 text-success"></i>Seleccionar imagen</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-4">
+                    <div class="col-12 col-lg-4">
+                        <div class="border rounded-3 p-3 h-100">
+                            <h6 class="fw-bold mb-3">Usar URL externa</h6>
+                            <input type="url" class="form-control mb-2" id="mediaPickerUrl" placeholder="https://... o /uploads/imagen.jpg">
+                            <button type="button" class="btn-admin-save w-100" id="mediaPickerUseUrl"><i class="bi bi-check2 me-1"></i> Usar esta URL</button>
+                            <hr>
+                            <h6 class="fw-bold mb-3">Subir desde mi PC</h6>
+                            <input type="file" class="form-control" id="mediaPickerFile" accept="image/jpeg,image/png,image/webp">
+                            <div class="small text-muted mt-2">Formatos: JPG, PNG o WebP. Maximo 5 MB.</div>
+                            <div class="alert alert-danger py-2 px-3 mt-3 d-none" id="mediaPickerError"></div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-lg-8">
+                        <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
+                            <h6 class="fw-bold mb-0">Galeria del servidor</h6>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="mediaPickerReload"><i class="bi bi-arrow-clockwise me-1"></i> Actualizar</button>
+                        </div>
+                        <div id="mediaPickerGallery" class="media-gallery-grid">
+                            <div class="text-muted small">Cargando imagenes...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+(function () {
+    const modalEl = document.getElementById('mediaPickerModal');
+    if (!modalEl || !window.bootstrap) return;
+
+    const modal = new bootstrap.Modal(modalEl);
+    const urlInput = document.getElementById('mediaPickerUrl');
+    const fileInput = document.getElementById('mediaPickerFile');
+    const useUrlBtn = document.getElementById('mediaPickerUseUrl');
+    const reloadBtn = document.getElementById('mediaPickerReload');
+    const galleryEl = document.getElementById('mediaPickerGallery');
+    const errorEl = document.getElementById('mediaPickerError');
+    let activeInput = null;
+    let activeCallback = null;
+    let galleryLoaded = false;
+
+    function showError(message) {
+        errorEl.textContent = message || '';
+        errorEl.classList.toggle('d-none', !message);
+    }
+
+    function isLikelyImage(url) {
+        return /\.(jpe?g|png|webp|gif|avif|svg)(\?.*)?$/i.test(url) || url.startsWith('/uploads/') || url.startsWith('/images/');
+    }
+
+    function refreshPreview(input) {
+        const shell = input.closest('.media-picker-shell');
+        if (!shell) return;
+        const clearBtn = shell.querySelector('.media-picker-clear');
+        if (clearBtn) clearBtn.disabled = input.value.trim() === '';
+        const preview = shell.querySelector('.media-picker-preview');
+        if (!preview) return;
+        const url = input.value.trim();
+        if (!url || !isLikelyImage(url)) {
+            preview.style.display = 'none';
+            preview.innerHTML = '';
+            return;
+        }
+        preview.innerHTML = '<img src="' + url.replace(/"/g, '&quot;') + '" alt="Vista previa">';
+        preview.style.display = 'block';
+    }
+
+    function selectUrl(url) {
+        if (!url) return;
+        if (activeInput) {
+            activeInput.value = url;
+            activeInput.dispatchEvent(new Event('input', { bubbles:true }));
+            activeInput.dispatchEvent(new Event('change', { bubbles:true }));
+            refreshPreview(activeInput);
+        }
+        if (typeof activeCallback === 'function') activeCallback(url);
+        modal.hide();
+    }
+
+    async function loadGallery(force) {
+        if (galleryLoaded && !force) return;
+        galleryEl.innerHTML = '<div class="text-muted small">Cargando imagenes...</div>';
+        try {
+            const response = await fetch('/admin/galeria-imagenes', { headers: { 'Accept': 'application/json' } });
+            const data = await response.json();
+            const items = Array.isArray(data.items) ? data.items : [];
+            galleryLoaded = true;
+            if (!items.length) {
+                galleryEl.innerHTML = '<div class="text-muted small">Aun no hay imagenes en la galer?a.</div>';
+                return;
+            }
+            galleryEl.innerHTML = items.map(item => `
+                <button type="button" class="media-gallery-item" data-url="${String(item.url).replace(/"/g, '&quot;')}">
+                    <img src="${String(item.url).replace(/"/g, '&quot;')}" alt="">
+                    <span title="${String(item.name || item.url).replace(/"/g, '&quot;')}">${item.name || item.url}</span>
+                </button>
+            `).join('');
+        } catch (error) {
+            galleryEl.innerHTML = '<div class="text-danger small">No se pudo cargar la galer?a.</div>';
+        }
+    }
+
+    function openPicker(options) {
+        activeInput = options && options.input ? options.input : null;
+        activeCallback = options && options.onSelect ? options.onSelect : null;
+        urlInput.value = activeInput ? activeInput.value : '';
+        fileInput.value = '';
+        showError('');
+        loadGallery(false);
+        modal.show();
+        setTimeout(() => urlInput.focus(), 180);
+    }
+
+    function enhanceInput(input) {
+        if (!input || input.dataset.mediaEnhanced === '1') return;
+        input.dataset.mediaEnhanced = '1';
+        const shell = document.createElement('div');
+        shell.className = 'media-picker-shell';
+        const control = document.createElement('div');
+        control.className = 'media-picker-control';
+        input.parentNode.insertBefore(shell, input);
+        shell.appendChild(control);
+        control.appendChild(input);
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'media-picker-btn';
+        btn.innerHTML = '<i class="bi bi-folder2-open"></i><span>Seleccionar</span>';
+        btn.addEventListener('click', () => openPicker({ input }));
+        control.appendChild(btn);
+
+        const clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.className = 'media-picker-btn media-picker-clear';
+        clearBtn.title = 'Eliminar imagen seleccionada';
+        clearBtn.setAttribute('aria-label', 'Eliminar imagen seleccionada');
+        clearBtn.innerHTML = '<i class="bi bi-trash"></i><span>Eliminar</span>';
+        clearBtn.addEventListener('click', () => {
+            input.value = '';
+            input.dispatchEvent(new Event('input', { bubbles:true }));
+        });
+        control.appendChild(clearBtn);
+
+        const preview = document.createElement('div');
+        preview.className = 'media-picker-preview';
+        shell.appendChild(preview);
+        input.addEventListener('input', () => refreshPreview(input));
+        input.addEventListener('change', () => refreshPreview(input));
+        refreshPreview(input);
+    }
+
+    useUrlBtn.addEventListener('click', () => selectUrl(urlInput.value.trim()));
+    urlInput.addEventListener('keydown', event => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            selectUrl(urlInput.value.trim());
+        }
+    });
+    reloadBtn.addEventListener('click', () => loadGallery(true));
+    galleryEl.addEventListener('click', event => {
+        const item = event.target.closest('[data-url]');
+        if (item) selectUrl(item.dataset.url);
+    });
+    fileInput.addEventListener('change', async () => {
+        if (!fileInput.files || !fileInput.files[0]) return;
+        showError('');
+        const form = new FormData();
+        form.append('image_file', fileInput.files[0]);
+        try {
+            const response = await fetch('/admin/upload-imagen', { method:'POST', body:form, headers:{ 'Accept':'application/json' } });
+            const data = await response.json();
+            if (!response.ok || !data.url) throw new Error(data.error || 'No se pudo subir la imagen.');
+            galleryLoaded = false;
+            selectUrl(data.url);
+        } catch (error) {
+            showError(error.message || 'No se pudo subir la imagen.');
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.js-media-picker').forEach(enhanceInput);
+    });
+
+    window.CaralMediaPicker = { open: openPicker, enhance: enhanceInput, refreshPreview: refreshPreview };
+})();
+</script>
+
 </body>
 </html>

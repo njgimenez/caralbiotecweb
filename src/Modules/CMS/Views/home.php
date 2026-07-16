@@ -4,59 +4,48 @@
      1. HERO SECTION (Customizable CMS)
 ══════════════════════════════════════ -->
 <?php if ($hero['is_active']): ?>
-<section class="hero-slider">
-    <div class="container position-relative" style="z-index:1">
-        <div class="row align-items-center">
-            <!-- Texto -->
-            <div class="col-12 col-lg-7">
-                <?php if (!empty($hero['content']['tag_text'])): ?>
-                <div class="hero-tag">
-                    <i class="bi bi-patch-check-fill"></i>
-                    <?= $this->e($hero['content']['tag_text']) ?>
-                </div>
-                <?php endif; ?>
-                <h1 class="hero-title">
-                    <?= str_replace(['&lt;br&gt;', '&lt;br /&gt;', '&lt;br/&gt;'], '<br>', $this->e($hero['content']['title_part1'] ?? '')) ?>
-                    <?php if (!empty($hero['content']['title_accent'])): ?>
-                        <span class="accent"><?= str_replace(['&lt;br&gt;', '&lt;br /&gt;', '&lt;br/&gt;'], '<br>', $this->e($hero['content']['title_accent'])) ?></span>
-                    <?php endif; ?>
-                    <?= str_replace(['&lt;br&gt;', '&lt;br /&gt;', '&lt;br/&gt;'], '<br>', $this->e($hero['content']['title_part2'] ?? '')) ?>
-                </h1>
-                <p class="hero-subtitle">
-                    <?= $this->e($hero['content']['subtitle'] ?? '') ?>
-                </p>
-                <div class="d-flex flex-wrap gap-3">
-                    <?php if (!empty($hero['content']['btn_primary_text'])): ?>
-                    <a href="<?= $this->e($hero['content']['btn_primary_url'] ?? '/productos') ?>" class="btn-primary-custom d-flex align-items-center gap-2 text-decoration-none">
-                        <i class="bi bi-cart3"></i> <?= $this->e($hero['content']['btn_primary_text']) ?>
-                    </a>
-                    <?php endif; ?>
-                    <?php if (!empty($hero['content']['btn_secondary_text'])): ?>
-                    <a href="<?= $this->e($hero['content']['btn_secondary_url'] ?? '#categorias') ?>" class="btn-outline-custom text-decoration-none">
-                        <?= $this->e($hero['content']['btn_secondary_text']) ?>
-                    </a>
-                    <?php endif; ?>
-                </div>
-                <!-- Mini stats -->
-                <div class="d-flex gap-5 mt-5 pt-3 justify-content-start">
-                    <div>
-                        <div style="font-size:1.6rem;font-weight:800;color:#4b2bb0">+500</div>
-                        <div style="font-size:.78rem;color:#64748b">Clientes felices</div>
-                    </div>
-                    <div style="width:1px;background:#e2e8f0"></div>
-                    <div>
-                        <div style="font-size:1.6rem;font-weight:800;color:#4b2bb0">100%</div>
-                        <div style="font-size:.78rem;color:#64748b">Calidad garantizada</div>
-                    </div>
-                    <div style="width:1px;background:#e2e8f0"></div>
-                    <div>
-                        <div style="font-size:1.6rem;font-weight:800;color:#4b2bb0">24h</div>
-                        <div style="font-size:.78rem;color:#64748b">Envío express</div>
+<?php $heroSlides = $hero['content']['slides'] ?? []; ?>
+<section id="homeHeroCarousel" class="carousel slide hero-carousel" data-bs-ride="carousel" data-bs-interval="6500">
+    <div class="carousel-inner">
+        <?php foreach ($heroSlides as $i => $slide): ?>
+        <div class="carousel-item <?= $i === 0 ? 'active' : '' ?>">
+            <div class="hero-slider" style="<?= !empty($slide['image_url']) ? 'background-image:url(' . $this->e($slide['image_url']) . ')' : '' ?>">
+                <div class="container position-relative" style="z-index:1">
+                    <div class="row align-items-center">
+                        <div class="col-12 col-lg-7">
+                            <?php if (!empty($slide['tag_text'])): ?>
+                            <div class="hero-tag"><i class="bi bi-patch-check-fill"></i><?= $this->e($slide['tag_text']) ?></div>
+                            <?php endif; ?>
+                            <h1 class="hero-title">
+                                <?= str_replace(['&lt;br&gt;', '&lt;br /&gt;', '&lt;br/&gt;'], '<br>', $this->e($slide['title_part1'] ?? '')) ?>
+                                <?php if (!empty($slide['title_accent'])): ?><span class="accent"><?= $this->e($slide['title_accent']) ?></span><?php endif; ?>
+                                <?= str_replace(['&lt;br&gt;', '&lt;br /&gt;', '&lt;br/&gt;'], '<br>', $this->e($slide['title_part2'] ?? '')) ?>
+                            </h1>
+                            <p class="hero-subtitle"><?= $this->e($slide['subtitle'] ?? '') ?></p>
+                            <div class="d-flex flex-wrap gap-3">
+                                <?php if (!empty($slide['btn_primary_text'])): ?>
+                                <a href="<?= $this->e($slide['btn_primary_url'] ?? '/productos') ?>" class="btn-primary-custom d-flex align-items-center gap-2 text-decoration-none"><i class="bi bi-cart3"></i><?= $this->e($slide['btn_primary_text']) ?></a>
+                                <?php endif; ?>
+                                <?php if (!empty($slide['btn_secondary_text'])): ?>
+                                <a href="<?= $this->e($slide['btn_secondary_url'] ?? '#categorias') ?>" class="btn-outline-custom text-decoration-none"><?= $this->e($slide['btn_secondary_text']) ?></a>
+                                <?php endif; ?>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
+        <?php endforeach; ?>
     </div>
+    <?php if (count($heroSlides) > 1): ?>
+    <button class="carousel-control-prev hero-carousel-control" type="button" data-bs-target="#homeHeroCarousel" data-bs-slide="prev"><span class="carousel-control-prev-icon"></span></button>
+    <button class="carousel-control-next hero-carousel-control" type="button" data-bs-target="#homeHeroCarousel" data-bs-slide="next"><span class="carousel-control-next-icon"></span></button>
+    <div class="carousel-indicators hero-carousel-indicators">
+        <?php foreach ($heroSlides as $i => $slide): ?>
+            <button type="button" data-bs-target="#homeHeroCarousel" data-bs-slide-to="<?= $i ?>" class="<?= $i === 0 ? 'active' : '' ?>" aria-label="Slide <?= $i + 1 ?>"></button>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
 </section>
 <?php endif; ?>
 
@@ -88,6 +77,7 @@
 <!-- ══════════════════════════════════════
      3. CATEGORÍAS
 ══════════════════════════════════════ -->
+<?php if (($categoriesSection['is_active'] ?? true)): ?>
 <section id="categorias" class="py-5" style="background:var(--slate-50)">
     <div class="container">
         <div class="d-flex justify-content-between align-items-end mb-1">
@@ -134,10 +124,12 @@
         </div>
     </div>
 </section>
+<?php endif; ?>
 
 <!-- ══════════════════════════════════════
      4. CONDICIONES DE SALUD
 ══════════════════════════════════════ -->
+<?php if (($needsSection['is_active'] ?? true)): ?>
 <section class="py-5" style="background:var(--white)">
     <div class="container">
         <h2 class="section-title">Compra según tu necesidad</h2>
@@ -178,10 +170,12 @@
         </div>
     </div>
 </section>
+<?php endif; ?>
 
 <!-- ══════════════════════════════════════
      5. PRODUCTOS DESTACADOS
 ══════════════════════════════════════ -->
+<?php if (($featuredProductsSection['is_active'] ?? true)): ?>
 <section class="py-5" style="background:var(--slate-50)">
     <div class="container">
         <div class="d-flex justify-content-between align-items-end mb-1">
@@ -234,11 +228,12 @@
         </div>
     </div>
 </section>
+<?php endif; ?>
 
 <!-- ══════════════════════════════════════
      6. ÚLTIMAS ENTRADAS DEL BLOG
 ══════════════════════════════════════ -->
-<?php if (!empty($latestPosts)): ?>
+<?php if (($blogSection['is_active'] ?? true) && !empty($latestPosts)): ?>
 <section class="py-5" style="background:var(--white)">
     <div class="container">
         <div class="d-flex justify-content-between align-items-end mb-1">

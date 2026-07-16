@@ -5,102 +5,84 @@ namespace Caral\Modules\CMS\Controllers;
 use PDO;
 use Caral\Core\Database;
 use Caral\Core\Template;
+use Caral\Modules\Admin\Services\CompanySettingsService;
 
 class HomeController
 {
     public function index(): void
     {
+        $categories = [];
+        $conditions = [];
+        $featuredProducts = [];
+        $cmsBlocks = [];
+        $latestPosts = [];
+
         try {
             $db = Database::getConnection();
-
-            // 1. Obtener todas las categorías
-            $stmt = $db->query("SELECT * FROM categories ORDER BY id ASC");
-            $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            // 2. Obtener todas las condiciones de salud
-            $stmt = $db->query("SELECT * FROM health_conditions ORDER BY id ASC");
-            $conditions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            // 3. Obtener productos destacados para la página de inicio
-            $stmt = $db->query("
-                SELECT p.*, c.name as category_name 
-                FROM products p 
-                JOIN categories c ON p.category_id = c.id 
-                WHERE p.is_active = 1 
-                LIMIT 4
-            ");
-            $featuredProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            // 4. Obtener bloques de CMS
-            $cmsStmt = $db->query("SELECT block_key, content_json, is_active FROM cms_blocks");
-            $cmsRows = $cmsStmt->fetchAll(PDO::FETCH_ASSOC);
-            
-            $cmsBlocks = [];
+            $cmsRows = $db->query('SELECT block_key, content_json, is_active FROM cms_blocks')->fetchAll(PDO::FETCH_ASSOC);
             foreach ($cmsRows as $row) {
+                $decoded = json_decode((string)$row['content_json'], true);
                 $cmsBlocks[$row['block_key']] = [
-                    'content' => json_decode($row['content_json'], true),
-                    'is_active' => (bool)$row['is_active']
+                    'content' => is_array($decoded) ? $decoded : [],
+                    'is_active' => (bool)$row['is_active'],
                 ];
             }
 
-            // 5. Últimas entradas publicadas del blog
-            $blogStmt = $db->query("
+            $categories = $db->query('SELECT * FROM categories ORDER BY id ASC')->fetchAll(PDO::FETCH_ASSOC);
+            $conditions = $db->query('SELECT * FROM health_conditions ORDER BY id ASC')->fetchAll(PDO::FETCH_ASSOC);
+
+            $featuredProducts = $db->query('
+                SELECT p.*, c.name as category_name
+                FROM products p
+                JOIN categories c ON p.category_id = c.id
+                WHERE p.is_active = 1
+                LIMIT 4
+            ')->fetchAll(PDO::FETCH_ASSOC);
+
+            $latestPosts = $db->query('
                 SELECT id, title, slug, excerpt, featured_image_url, tags, published_at
                 FROM blog_posts
-                WHERE status = 'published'
-                  AND published_at IS NOT NULL
-                  AND published_at <= NOW()
+                WHERE status = "published" AND published_at IS NOT NULL AND published_at <= NOW()
                 ORDER BY published_at DESC, id DESC
                 LIMIT 3
-            ");
-            $latestPosts = $blogStmt->fetchAll(PDO::FETCH_ASSOC);
+            ')->fetchAll(PDO::FETCH_ASSOC);
         } catch (\Exception $e) {
-            // Valores por defecto en caso de error o base de datos no configurada
-            $categories = [];
-            $conditions = [];
-            $featuredProducts = [];
-            $cmsBlocks = [];
-            $latestPosts = [];
+            error_log('No se pudieron cargar todos los datos del Home: ' . $e->getMessage());
         }
 
-        // Definir fallbacks por si acaso no hay datos en cms_blocks
-        $hero = $cmsBlocks['home_hero'] ?? [
-            'is_active' => true,
-            'content' => [
-                'tag_text' => 'Productos certificados · Lima, Perú',
-                'title_part1' => 'Soluciones integrales para tu',
-                'title_accent' => 'bienestar',
-                'title_part2' => 'y recuperación',
-                'subtitle' => 'Nutracéuticos, equipos de rehabilitación y productos de bienestar seleccionados por especialistas para mejorar tu calidad de vida.',
-                'btn_primary_text' => 'Comprar ahora',
-                'btn_primary_url' => '/productos',
-                'btn_secondary_text' => 'Ver categorías',
-                'btn_secondary_url' => '#categorias'
-            ]
-        ];
+        $hero = $cmsBlocks['home_hero'] ?? ['is_active' => true, 'content' => self::defaultHeroContent()];
+        $hero['content'] = self::normalizeHeroContent($hero['content'] ?? []);
 
         $benefits = $cmsBlocks['home_benefits'] ?? [
             'is_active' => true,
             'content' => [
-                ['icon' => 'truck', 'title' => 'Envíos a todo el Perú', 'desc' => 'Rápidos y seguros'],
-                ['icon' => 'shield-check', 'title' => 'Productos de calidad', 'desc' => 'Garantía y respaldo'],
+                ['icon' => 'truck', 'title' => 'Envios a todo el Peru', 'desc' => 'Rapidos y seguros'],
+                ['icon' => 'shield-check', 'title' => 'Productos de calidad', 'desc' => 'Garantia y respaldo'],
                 ['icon' => 'lock', 'title' => 'Compra 100% segura', 'desc' => 'Tus datos protegidos'],
-                ['icon' => 'headset', 'title' => 'Atención personalizada', 'desc' => 'Te asesoramos siempre']
-            ]
+                ['icon' => 'headset', 'title' => 'Atencion personalizada', 'desc' => 'Te asesoramos siempre'],
+            ],
         ];
 
         $cta = $cmsBlocks['home_cta'] ?? [
             'is_active' => true,
             'content' => [
-                'title' => '¿Necesitas asesoría personalizada?',
-                'subtitle' => 'Nuestro equipo de especialistas está listo para ayudarte a elegir el producto ideal.',
+                'title' => 'Necesitas asesoria personalizada?',
+                'subtitle' => 'Nuestro equipo de especialistas esta listo para ayudarte a elegir el producto ideal.',
                 'btn_text' => 'Chatear por WhatsApp',
-                'btn_url' => 'https://wa.me/51947123456',
-                'btn_icon' => 'whatsapp'
-            ]
+                'btn_url' => CompanySettingsService::whatsappUrl(),
+                'btn_icon' => 'whatsapp',
+            ],
         ];
 
-        // Renderizar la vista home
+        if (($cta['content']['btn_icon'] ?? '') === 'whatsapp') {
+            $cta['content']['btn_url'] = CompanySettingsService::whatsappUrl();
+        }
+
+        $categoriesSection = $cmsBlocks['home_categories'] ?? ['is_active' => true, 'content' => []];
+        $needsSection = $cmsBlocks['home_needs'] ?? ['is_active' => true, 'content' => []];
+        $featuredProductsSection = $cmsBlocks['home_featured_products'] ?? ['is_active' => true, 'content' => []];
+        $blogSection = $cmsBlocks['home_blog'] ?? ['is_active' => true, 'content' => []];
+
         echo Template::render('CMS', 'home', [
             'categories' => $categories,
             'conditions' => $conditions,
@@ -108,7 +90,64 @@ class HomeController
             'latestPosts' => $latestPosts,
             'hero' => $hero,
             'benefits' => $benefits,
-            'cta' => $cta
+            'cta' => $cta,
+            'categoriesSection' => $categoriesSection,
+            'needsSection' => $needsSection,
+            'featuredProductsSection' => $featuredProductsSection,
+            'blogSection' => $blogSection,
         ]);
+    }
+
+    public function about(): void
+    {
+        echo Template::render('CMS', 'about', [
+            'company' => CompanySettingsService::get(),
+        ]);
+    }
+
+    public function contact(): void
+    {
+        echo Template::render('CMS', 'contact', [
+            'company' => CompanySettingsService::get(),
+            'whatsappUrl' => CompanySettingsService::whatsappUrl(),
+        ]);
+    }
+
+    private static function defaultHeroContent(): array
+    {
+        return [
+            'slides' => [[
+                'tag_text' => 'Productos certificados - Lima, Peru',
+                'title_part1' => 'Soluciones integrales para tu',
+                'title_accent' => 'bienestar',
+                'title_part2' => 'y recuperacion',
+                'subtitle' => 'Nutraceuticos, equipos de rehabilitacion y productos de bienestar seleccionados por especialistas para mejorar tu calidad de vida.',
+                'image_url' => '/images/hero-bg.png',
+                'btn_primary_text' => 'Comprar ahora',
+                'btn_primary_url' => '/productos',
+                'btn_secondary_text' => 'Ver categorias',
+                'btn_secondary_url' => '#categorias',
+            ]],
+        ];
+    }
+
+    private static function normalizeHeroContent(array $content): array
+    {
+        if (!empty($content['slides']) && is_array($content['slides'])) {
+            return $content;
+        }
+
+        return ['slides' => [[
+            'tag_text' => $content['tag_text'] ?? 'Productos certificados - Lima, Peru',
+            'title_part1' => $content['title_part1'] ?? 'Soluciones integrales para tu',
+            'title_accent' => $content['title_accent'] ?? 'bienestar',
+            'title_part2' => $content['title_part2'] ?? 'y recuperacion',
+            'subtitle' => $content['subtitle'] ?? '',
+            'image_url' => $content['image_url'] ?? '/images/hero-bg.png',
+            'btn_primary_text' => $content['btn_primary_text'] ?? 'Comprar ahora',
+            'btn_primary_url' => $content['btn_primary_url'] ?? '/productos',
+            'btn_secondary_text' => $content['btn_secondary_text'] ?? 'Ver categorias',
+            'btn_secondary_url' => $content['btn_secondary_url'] ?? '#categorias',
+        ]]];
     }
 }

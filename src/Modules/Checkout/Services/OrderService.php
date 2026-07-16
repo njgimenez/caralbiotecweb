@@ -38,9 +38,33 @@ class OrderService
             $subtotal += $item['price_seen'] * $item['quantity'];
         }
 
+        $fulfillmentMethod = ($customerData['fulfillment_method'] ?? 'delivery') === 'pickup' ? 'pickup' : 'delivery';
+        $city = DeliveryService::normalizeCity((string)($customerData['city'] ?? 'Lima'));
+        $isProvince = $fulfillmentMethod === 'delivery' && !DeliveryService::isLimaCity($city);
+        $courier = $isProvince ? strtoupper(trim((string)($customerData['courier'] ?? ''))) : null;
+        $delivery = null;
         $shipping = 0.00;
+
+        if ($fulfillmentMethod === 'delivery') {
+            if ($isProvince) {
+                if (!in_array((string)$courier, DeliveryService::provinceCourierOptions(), true)) {
+                    throw new \RuntimeException('Selecciona OLVA o SHALOM para envio a provincia.');
+                }
+
+                $shipping = DeliveryService::provinceHandlingFee();
+            } else {
+                $delivery = DeliveryService::findDistrict((string)($customerData['district'] ?? ''));
+                if (!$delivery) {
+                    throw new \RuntimeException('Selecciona un distrito con cobertura de delivery.');
+                }
+
+                $shipping = (float)$delivery['tarifa'];
+            }
+        }
+
         $total = $subtotal + $shipping;
         $orderNumber = self::generatePaymentOrderNumber();
+        $paymentEnvironment = IzipayService::mode();
 
         $db->beginTransaction();
         try {
@@ -50,16 +74,22 @@ class OrderService
                     customer_name, customer_email, customer_phone,
                     customer_document_type, customer_document,
                     shipping_address, shipping_district, shipping_city,
+                    fulfillment_method, delivery_type, courier,
+                    delivery_zone, delivery_route_code, delivery_route_name,
+                    delivery_time_min, delivery_time_max,
                     subtotal, shipping_cost, total, currency,
-                    payment_method, payment_provider, payment_status, status,
+                    payment_method, payment_provider, payment_environment, payment_status, status,
                     checkout_token_hash, checkout_expires_at
                 ) VALUES (
                     :order_number, :user_id, :source_cart_id,
                     :name, :email, :phone,
                     :document_type, :document,
                     :address, :district, :city,
+                    :fulfillment_method, :delivery_type, :courier,
+                    :delivery_zone, :delivery_route_code, :delivery_route_name,
+                    :delivery_time_min, :delivery_time_max,
                     :subtotal, :shipping, :total, 'PEN',
-                    'izipay', 'izipay_formtoken', 'pending', 'pending',
+                    'izipay', 'izipay_formtoken', :payment_environment, 'pending', 'pending',
                     :checkout_token_hash, DATE_ADD(NOW(), INTERVAL 24 HOUR)
                 )
             ");
@@ -72,12 +102,21 @@ class OrderService
                 'phone' => $customerData['phone'] ?? null,
                 'document_type' => $customerData['document_type'] ?? 'DNI',
                 'document' => $customerData['document'] ?? null,
-                'address' => $customerData['address'] ?? null,
-                'district' => $customerData['district'] ?? null,
-                'city' => $customerData['city'] ?? 'Lima',
+                'address' => $fulfillmentMethod === 'delivery' ? ($customerData['address'] ?? null) : 'Recojo en tienda',
+                'district' => $fulfillmentMethod === 'delivery' ? ($isProvince ? null : $delivery['distrito']) : null,
+                'city' => $city,
+                'fulfillment_method' => $fulfillmentMethod,
+                'delivery_type' => $fulfillmentMethod === 'pickup' ? 'pickup' : ($isProvince ? 'province' : 'lima'),
+                'courier' => $courier,
+                'delivery_zone' => $isProvince ? 'Envio a Provincia' : ($delivery['zona_cardinal'] ?? null),
+                'delivery_route_code' => $isProvince ? $courier : ($delivery['ruta_delivery'] ?? null),
+                'delivery_route_name' => $isProvince ? ('Courier ' . $courier) : ($delivery['ruta_nombre'] ?? null),
+                'delivery_time_min' => $isProvince ? null : ($delivery['tiempo_min'] ?? null),
+                'delivery_time_max' => $isProvince ? null : ($delivery['tiempo_max'] ?? null),
                 'subtotal' => $subtotal,
                 'shipping' => $shipping,
                 'total' => $total,
+                'payment_environment' => $paymentEnvironment,
                 'checkout_token_hash' => hash('sha256', $checkoutToken),
             ]);
             $orderId = (int)$db->lastInsertId();
@@ -193,6 +232,7 @@ class OrderService
             }
 
             if ((string)$order['payment_status'] === 'paid') {
+                self::completeSourceCart($db, $order['source_cart_id'] ?? null);
                 $db->commit();
                 return;
             }
@@ -220,10 +260,7 @@ class OrderService
                 $stockStmt->execute(['qty_update' => $item['quantity'], 'qty_check' => $item['quantity'], 'pid' => $item['product_id']]);
             }
 
-            if (!empty($order['source_cart_id'])) {
-                $cartStmt = $db->prepare("UPDATE shopping_carts SET status = 'completed' WHERE id = :id");
-                $cartStmt->execute(['id' => $order['source_cart_id']]);
-            }
+            self::completeSourceCart($db, $order['source_cart_id'] ?? null);
 
             $db->commit();
         } catch (\Throwable $e) {
@@ -309,6 +346,16 @@ class OrderService
             WHERE id = :id AND payment_status IN ('pending', 'payment_started', 'authorized', 'failed')
         ");
         $stmt->execute(['id' => $orderId]);
+    }
+
+    private static function completeSourceCart(PDO $db, mixed $sourceCartId): void
+    {
+        if (empty($sourceCartId)) {
+            return;
+        }
+
+        $cartStmt = $db->prepare("UPDATE shopping_carts SET status = 'completed' WHERE id = :id");
+        $cartStmt->execute(['id' => $sourceCartId]);
     }
 
     public static function findById(int $id): ?array

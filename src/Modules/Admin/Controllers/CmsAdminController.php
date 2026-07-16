@@ -15,6 +15,7 @@ class CmsAdminController
             header('Location: /login');
             exit();
         }
+
         $role = Session::getUserRole();
         if (!in_array($role, ['Super Administrador', 'Marketing'])) {
             header('Location: /');
@@ -22,26 +23,24 @@ class CmsAdminController
         }
     }
 
-    // GET /admin/cms
     public function index(): void
     {
         $this->requireAdmin();
         $db = Database::getConnection();
 
-        $blocks = $db->query("SELECT * FROM cms_blocks ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
+        $blocks = $db->query('SELECT * FROM cms_blocks ORDER BY id ASC')->fetchAll(PDO::FETCH_ASSOC);
 
         echo Template::renderAdmin('cms/index', [
-            'blocks' => $blocks
+            'blocks' => $blocks,
         ]);
     }
 
-    // GET /admin/cms/{key}/editar
     public function edit(string $key): void
     {
         $this->requireAdmin();
         $db = Database::getConnection();
 
-        $stmt = $db->prepare("SELECT * FROM cms_blocks WHERE block_key = :key");
+        $stmt = $db->prepare('SELECT * FROM cms_blocks WHERE block_key = :key');
         $stmt->execute(['key' => $key]);
         $block = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -51,38 +50,45 @@ class CmsAdminController
             exit();
         }
 
-        $content = json_decode($block['content_json'], true);
+        $content = json_decode((string)$block['content_json'], true);
+        $content = is_array($content) ? $content : [];
 
-        // Renderizar vista específica según el tipo de bloque
         if ($key === 'home_hero') {
             echo Template::renderAdmin('cms/edit_hero', [
                 'block' => $block,
-                'content' => $content
+                'content' => $content,
             ]);
-        } elseif ($key === 'home_benefits') {
+            return;
+        }
+
+        if ($key === 'home_benefits') {
             echo Template::renderAdmin('cms/edit_benefits', [
                 'block' => $block,
-                'content' => $content
+                'content' => $content,
             ]);
-        } elseif ($key === 'home_cta') {
+            return;
+        }
+
+        if ($key === 'home_cta') {
             echo Template::renderAdmin('cms/edit_cta', [
                 'block' => $block,
-                'content' => $content
+                'content' => $content,
             ]);
-        } else {
-            Session::set('flash_error', 'Tipo de bloque no editable.');
-            header('Location: /admin/cms');
-            exit();
+            return;
         }
+
+        echo Template::renderAdmin('cms/edit_generic', [
+            'block' => $block,
+            'content' => $content,
+        ]);
     }
 
-    // POST /admin/cms/{key}/actualizar
     public function update(string $key): void
     {
         $this->requireAdmin();
         $db = Database::getConnection();
 
-        $stmt = $db->prepare("SELECT * FROM cms_blocks WHERE block_key = :key");
+        $stmt = $db->prepare('SELECT * FROM cms_blocks WHERE block_key = :key');
         $stmt->execute(['key' => $key]);
         $block = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -96,19 +102,53 @@ class CmsAdminController
         $contentData = [];
 
         if ($key === 'home_hero') {
-            $contentData = [
-                'tag_text' => trim($_POST['tag_text'] ?? ''),
-                'title_part1' => trim($_POST['title_part1'] ?? ''),
-                'title_accent' => trim($_POST['title_accent'] ?? ''),
-                'title_part2' => trim($_POST['title_part2'] ?? ''),
-                'subtitle' => trim($_POST['subtitle'] ?? ''),
-                'btn_primary_text' => trim($_POST['btn_primary_text'] ?? ''),
-                'btn_primary_url' => trim($_POST['btn_primary_url'] ?? ''),
-                'btn_secondary_text' => trim($_POST['btn_secondary_text'] ?? ''),
-                'btn_secondary_url' => trim($_POST['btn_secondary_url'] ?? ''),
-            ];
+            $slides = [];
+            $postedSlides = $_POST['slides'] ?? [];
+            if (is_array($postedSlides)) {
+                foreach ($postedSlides as $slide) {
+                    if (!is_array($slide)) {
+                        continue;
+                    }
+                    $titlePart1 = trim((string)($slide['title_part1'] ?? ''));
+                    $titleAccent = trim((string)($slide['title_accent'] ?? ''));
+                    $titlePart2 = trim((string)($slide['title_part2'] ?? ''));
+                    $subtitle = trim((string)($slide['subtitle'] ?? ''));
+                    $imageUrl = trim((string)($slide['image_url'] ?? ''));
+                    if ($titlePart1 === '' && $titleAccent === '' && $titlePart2 === '' && $subtitle === '' && $imageUrl === '') {
+                        continue;
+                    }
+                    $slides[] = [
+                        'tag_text' => trim((string)($slide['tag_text'] ?? '')),
+                        'title_part1' => $titlePart1,
+                        'title_accent' => $titleAccent,
+                        'title_part2' => $titlePart2,
+                        'subtitle' => $subtitle,
+                        'image_url' => $imageUrl,
+                        'btn_primary_text' => trim((string)($slide['btn_primary_text'] ?? '')),
+                        'btn_primary_url' => trim((string)($slide['btn_primary_url'] ?? '')),
+                        'btn_secondary_text' => trim((string)($slide['btn_secondary_text'] ?? '')),
+                        'btn_secondary_url' => trim((string)($slide['btn_secondary_url'] ?? '')),
+                    ];
+                }
+            }
+
+            if ($slides === []) {
+                $slides[] = [
+                    'tag_text' => 'Productos certificados - Lima, Peru',
+                    'title_part1' => 'Soluciones integrales para tu',
+                    'title_accent' => 'bienestar',
+                    'title_part2' => 'y recuperacion',
+                    'subtitle' => 'Nutraceuticos, equipos de rehabilitacion y productos de bienestar seleccionados por especialistas.',
+                    'image_url' => '/images/hero-bg.png',
+                    'btn_primary_text' => 'Comprar ahora',
+                    'btn_primary_url' => '/productos',
+                    'btn_secondary_text' => 'Ver categorias',
+                    'btn_secondary_url' => '#categorias',
+                ];
+            }
+
+            $contentData = ['slides' => $slides];
         } elseif ($key === 'home_benefits') {
-            // Un array de 4 beneficios
             for ($i = 0; $i < 4; $i++) {
                 $contentData[] = [
                     'icon' => trim($_POST["icon_$i"] ?? 'check-circle'),
@@ -124,20 +164,36 @@ class CmsAdminController
                 'btn_url' => trim($_POST['btn_url'] ?? ''),
                 'btn_icon' => trim($_POST['btn_icon'] ?? 'chat'),
             ];
+        } else {
+            $json = trim((string)($_POST['content_json'] ?? '{}'));
+            $json = $json === '' ? '{}' : $json;
+            $decoded = json_decode($json, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                Session::set('flash_error', 'El contenido JSON del bloque no es valido: ' . json_last_error_msg());
+                header('Location: /admin/cms/' . rawurlencode($key) . '/editar');
+                exit();
+            }
+
+            $contentData = $decoded;
         }
 
-        $updateStmt = $db->prepare("
-            UPDATE cms_blocks 
-            SET content_json = :json, is_active = :active 
+        $title = trim((string)($_POST['block_title'] ?? $block['title']));
+        $title = $title !== '' ? $title : $block['title'];
+
+        $updateStmt = $db->prepare('
+            UPDATE cms_blocks
+            SET title = :title, content_json = :json, is_active = :active
             WHERE block_key = :key
-        ");
+        ');
         $updateStmt->execute([
+            'title' => $title,
             'json' => json_encode($contentData, JSON_UNESCAPED_UNICODE),
             'active' => $isActive,
-            'key' => $key
+            'key' => $key,
         ]);
 
-        Session::set('flash_success', "Bloque «{$block['title']}» actualizado correctamente.");
+        Session::set('flash_success', "Bloque {$title} actualizado correctamente.");
         header('Location: /admin/cms');
         exit();
     }
