@@ -1,0 +1,27 @@
+ACTUALIZACION CARAL BIOTEC - 17/07/2026
+
+CONTENIDO
+- Solo archivos de aplicacion modificados.
+- Migraciones y datos de rutas requeridos.
+- public/update_20260717.php para actualizar la base de datos.
+- No incluye .env, respaldos, vendor ni archivos subidos por usuarios.
+
+PASOS
+1. Haz un respaldo completo de archivos y base de datos de produccion.
+2. En el .env del servidor configura temporalmente:
+   SCHEMA_UPDATE_TOKEN=UN_TOKEN_LARGO_Y_ALEATORIO
+3. Sube el contenido del ZIP a la raiz del proyecto y sobrescribe los archivos.
+   No reemplaces ni elimines el .env de produccion.
+4. Ejecuta el actualizador:
+   - Si el dominio apunta a public/: https://caralbiotec.com/update_20260717.php?token=TU_TOKEN
+   - Con terminal cPanel: php public/update_20260717.php TU_TOKEN
+5. Confirma que aparezca ACTUALIZACION COMPLETADA.
+6. Elimina inmediatamente public/update_20260717.php del servidor.
+7. Retira SCHEMA_UPDATE_TOKEN del .env si ya no se utilizara.
+8. Prueba home, productos, checkout, blog, CMS, carga de imagen/video y boletas.
+
+IMPORTANTE
+- El actualizador es idempotente y puede repetirse si se interrumpe.
+- Conserva contenido y estados existentes del CMS.
+- Conserva ordenes, productos y archivos subidos.
+- No ejecutes public/install.php ni scripts antiguos de restore/update.
